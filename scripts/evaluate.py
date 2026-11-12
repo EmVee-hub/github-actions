@@ -286,8 +286,7 @@ def report_legend(report: dict) -> list[str]:
              "| EPSS bin | Q1–Q4 are FIRST EPSS percentile quartiles; missing EPSS uses neutral Q2. |",
              "| Base / Final | CISA BOD 26-04 outcome / EPSS-amplified final outcome; 3DF includes forensic follow-up. |",
              "| FSU | Address at a future scheduled upgrade/rebuild; no separate fixed-day deadline. Reevaluate each scan. |",
-             "| Defaulted inputs | Assumptions, when reported. Source fields in decision.json provide the full provenance. |",
-             "| Decision rule / Admission reason | KEV_GUARD and URGENT_BASE_GUARD preserve BOD outcomes; AMPLIFIED applies the local EPSS table. |",
+             "| Decision rule | KEV_GUARD and URGENT_BASE_GUARD preserve BOD outcomes; AMPLIFIED applies the local EPSS table. |",
              "",
              "In enforce mode, BLOCK and REVIEW_REQUIRED fail the scan step. Shadow mode reports those decisions while allowing the step to complete.",
              "Download the security-* artifact: report.md is this summary; decision.json includes EPSS probability, input sources and decisions; grype.json and vulnrichment.json contain the scan and enrichment evidence."]
@@ -316,24 +315,21 @@ def markdown_report(report: dict) -> str:
               "- Exposure: `" + esc(report["exposure_input"]) + "` → PE=`"
                   + esc(report["publicly_exposed"]) + "` (`" + esc(report["exposure_source"]) + "`)",
               "- Admission: **" + esc(report["admission"]) + "**",
-              "- Provisional urgent findings (nonblocking): " + str(report["provisional_count"]),
               "- Admission policy: `" + esc(report["admission_policy"]) + "`",
               "- Base model: `" + esc(report["model"]) + "`",
               "- EPSS amplifier: `" + esc(report["amplifier"]) + "`",
               "- VEX-suppressed findings: " + str(report["vex_ignored_count"]), ""]
-    lines += ["| CVE/advisory | Package | Severity | KEV | PE | Automatable | TI | SSVC lookup | EPSS bin | Base | Final | Decision rule | Admission | Defaulted inputs | Admission reason |","|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines += ["| CVE/advisory | Package | Severity | KEV | PE | Automatable | TI | SSVC lookup | EPSS bin | Base | Final | Decision rule |","|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for finding in report["findings"]:
         cells = [finding.get("cve") or finding.get("vulnerability_id"),
                  finding.get("package"), finding.get("severity"), finding.get("kev"),
                  finding.get("publicly_exposed"), finding.get("automatable"),
                  finding.get("technical_impact"), finding.get("vulnrichment_status"),
                  finding.get("epss_bin"), finding.get("base_outcome"),
-                 finding.get("final_outcome"), finding.get("rule"),
-                 finding.get("admission"), ", ".join(finding.get("defaulted_inputs", [])),
-                 finding.get("admission_reason")]
+                 finding.get("final_outcome"), finding.get("rule")]
         lines.append("| " + " | ".join(esc(c) for c in cells) + " |")
     if not report["findings"]:
-        lines.append("| No active findings | — | — | — | — | — | — | — | — | — | — | — | — | — | — |")
+        lines.append("| No active findings | — | — | — | — | — | — | — | — | — | — | — |")
     lines += report_legend(report)
     lines += ["","## VEX-suppressed findings","","VEX can change **applicability**, not the CVE severity. Only findings accepted by Grype's VEX matching are excluded from the active gate; the original records remain below.",""]
     if report["ignored_matches"]:
