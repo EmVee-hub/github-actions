@@ -291,6 +291,7 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
         "model": base["id"],
         "amplifier": amp["probability_policy"]["id"] if poc_kev_epss else amp["id"],
         "admission": decision,
+        "probability_policy": amp["probability_policy"] if poc_kev_epss else None,
         "admission_policy": ("LOCAL:POC_KEV_EPSS:1.0.0" if poc_kev_epss
                              else "LOCAL:QUARTILE_CI:1.0.0"),
         "admission_counts": dict(admission_counts),
@@ -309,6 +310,47 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
             "VEX ignore results must be reviewed for precise product/component scope before enforcement."
         ]
     }
+
+
+def report_legend(report: dict) -> list[str]:
+    lines = ["", "## How to read and use this report", "",
+             "1. Check Admission. ALLOW permits the image under the selected policy. BLOCK requires remediation or a reviewed, correctly scoped disposition. REVIEW_REQUIRED means assessment data is incomplete.",
+             "2. Use Final for the local remediation target and Base for the original BOD result. Group repeated CVEs across packages when reviewing.",
+             "3. Review the VEX-suppressed section for applicability evidence. FSU findings stay visible and are reassessed on subsequent scans.",
+             "",
+             "| Field | Meaning |", "|---|---|",
+             "| KEV | Y = listed as known exploited in the available intelligence; N = absent from the scan database enrichment, subject to its freshness. |",
+             "| PE | Public exposure. Y = public or conservatively assumed public when unknown; N = declared internal. |",
+             "| Automatable | Y/N = exploitation can/cannot be automated according to SSVC or the recorded fallback. |",
+             "| TI | P = Partial technical impact; T = Total. |",
+             "| SSVC lookup | FOUND = CISA values available; NO_SSVC / NO_RECORD = defaults used; lookup failures require review. |",
+             "| Severity | Scanner/vendor severity. The current probability policy does not use it to assign deadlines. |",
+             "| EPSS bin | Q1–Q4 are percentile quartiles. The PoC probability policy uses EPSS probability from decision.json. |",
+             "| Base / Final | BOD outcome / active policy target. 30D and 60D mean days; 3DF includes forensic follow-up. |",
+             "| FSU | Address at a future scheduled upgrade/rebuild; no separate fixed-day deadline. Reevaluate each scan. |",
+             "| Defaulted inputs | Assumptions, when reported. Source fields in decision.json provide the full provenance. |",
+             "| Decision rule / Admission reason | Explain the target and gate result. POC_KEV_URGENT handles KEV; POC_EPSS_PROBABILITY handles non-KEV. |",
+             "",
+             "In enforce mode, BLOCK and REVIEW_REQUIRED fail the scan step. Shadow mode reports those decisions while allowing the step to complete.",
+             "Download the security-* artifact: report.md is this summary; decision.json includes EPSS probability, input sources and decisions; grype.json and vulnrichment.json contain the scan and enrichment evidence."]
+    policy = report.get("probability_policy")
+    if policy:
+        rules = policy["non_kev"]
+        lines += ["", "### Active PoC amplifier", "",
+                  "| Condition | Final target | CI |", "|---|---|---|",
+                  "| KEV=Y | " + policy["kev"]["default"] + "; preserve " + ", ".join(policy["kev"]["preserve"]) + " | BLOCK |"]
+        upper = None
+        for threshold in rules["thresholds"]:
+            value = threshold["minimum_probability"]
+            condition = f"KEV=N, EPSS probability ≥{value:.0%}"
+            if upper is not None:
+                condition += f" and <{upper:.0%}"
+            lines.append(f"| {condition} | {threshold['outcome']} | ALLOW |")
+            upper = value
+        lines += [f"| KEV=N, below all thresholds | {rules['default']} | ALLOW |",
+                  f"| KEV=N, EPSS missing | {rules['missing']} | ALLOW |",
+                  "", "These local policy settings come from policy/epss-amplifier.json in the pinned shared action revision. Updating that file requires publishing a revision and updating caller pins."]
+    return lines
 
 
 def markdown_report(report: dict) -> str:
@@ -337,6 +379,7 @@ def markdown_report(report: dict) -> str:
         lines.append("| " + " | ".join(esc(c) for c in cells) + " |")
     if not report["findings"]:
         lines.append("| No active findings | — | — | — | — | — | — | — | — | — | — | — | — | — | — |")
+    lines += report_legend(report)
     lines += ["","## VEX-suppressed findings","","VEX can change **applicability**, not the CVE severity. Only findings accepted by Grype's VEX matching are excluded from the active gate; the original records remain below.",""]
     if report["ignored_matches"]:
         lines += ["| Vulnerability | Package | Ignore evidence | Reason |","|---|---|---|---|"]
