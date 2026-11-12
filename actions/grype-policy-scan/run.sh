@@ -46,7 +46,13 @@ fi
   --vex "$VEX" \
   --output json > "$REPORT_DIR/grype.json"
 
+# Fetch CISA-published SSVC data for distinct unsuppressed CVEs.
+python3 "$ROOT/scripts/fetch_vulnrichment.py" \
+  --input "$REPORT_DIR/grype.json" \
+  --output "$REPORT_DIR/vulnrichment.json"
+
 DECISION=$(python3 "$ROOT/scripts/evaluate.py" \
+  --vulnrichment "$REPORT_DIR/vulnrichment.json" \
   --input "$REPORT_DIR/grype.json" \
   --policy-dir "$ROOT/policy" \
   --image "$INPUT_IMAGE" \

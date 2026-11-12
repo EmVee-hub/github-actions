@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Small Grype JSON -> BOD 26-04 -> local EPSS amplifier evaluator.
+"""Grype JSON + CISA Vulnrichment -> BOD 26-04 -> EPSS evaluator.
 
-No network calls, no dependencies beyond Python 3.10+. This does not fetch
-CISA Vulnrichment or validate that an image is actually deployed.
+The network lookup is kept separate so this evaluator remains deterministic.
 """
 from __future__ import annotations
 
@@ -112,16 +111,34 @@ def technical_impact(match: dict) -> tuple[str, str]:
     return "T", "LOCAL_CONSERVATIVE_DEFAULT"
 
 
-def make_decision(match: dict, exposure: str, mapping: dict, amp: dict) -> dict:
+def cisa_values(cve: str | None, enrichment: dict | None) -> dict:
+    if not cve:
+        return {"status": "NO_CVE"}
+    if enrichment is None:
+        return {"status": "NOT_QUERIED"}
+    return (enrichment.get("cves") or {}).get(cve, {
+        "status": "FETCH_ERROR", "reason": "CVE missing from enrichment batch"
+    })
+
+
+def make_decision(match: dict, exposure: str, mapping: dict, amp: dict,
+                  enrichment: dict | None = None) -> dict:
     vuln = match.get("vulnerability") or {}
     artifact = match.get("artifact") or {}
     kev, kev_source = kev_status(match)
     percentile, probability, epss_date = epss_percentile(match)
     ti, ti_source = technical_impact(match)
+    cve = select_cve(match)
+    cisa = cisa_values(cve, enrichment)
+    cisa_status = cisa.get("status")
+    automatable, automatable_source = "Y", "SSVC_DEFAULT_MISSING_VULNRICHMENT"
+    if cisa_status == "FOUND":
+        automatable, automatable_source = cisa["automatable"], "CISA_VULNRICHMENT_ADP"
+        ti, ti_source = cisa["technical_impact"], "CISA_VULNRICHMENT_ADP"
     pe = "N" if exposure == "internal" else "Y"
     row = {
         "vulnerability_id": vuln.get("id"),
-        "cve": select_cve(match),
+        "cve": cve,
         "package": artifact.get("name"),
         "installed_version": artifact.get("version"),
         "severity": vuln.get("severity"),
@@ -129,8 +146,13 @@ def make_decision(match: dict, exposure: str, mapping: dict, amp: dict) -> dict:
         "kev_source": kev_source,
         "publicly_exposed": pe,
         "exposure_source": "PROJECT_DECLARATION" if exposure in ("public", "internal") else "UNKNOWN_DEFAULT_PUBLIC",
-        "automatable": "Y",
-        "automatable_source": "SSVC_DEFAULT_NOT_VULNRICHMENT",
+        "automatable": automatable,
+        "automatable_source": automatable_source,
+        "vulnrichment_status": cisa_status,
+        "vulnrichment_version": cisa.get("ssvc_version"),
+        "vulnrichment_timestamp": cisa.get("ssvc_timestamp"),
+        "vulnrichment_source_url": cisa.get("url"),
+        "vulnrichment_error": cisa.get("reason") if cisa_status in ("FETCH_ERROR", "INVALID_SSVC") else None,
         "technical_impact": ti,
         "technical_impact_source": ti_source,
         "epss_percentile": percentile,
@@ -138,23 +160,25 @@ def make_decision(match: dict, exposure: str, mapping: dict, amp: dict) -> dict:
         "epss_date": epss_date,
         "epss_source": "GRYPE_DATABASE" if percentile is not None else "UNAVAILABLE_NEUTRAL_Q2"
     }
-    if kev == "UNKNOWN":
+    if kev == "UNKNOWN" or cisa_status in ("FETCH_ERROR", "INVALID_SSVC"):
+        reason = "KEV_UNKNOWN" if kev == "UNKNOWN" else "VULNRICHMENT_LOOKUP_FAILED"
         row.update({"base_outcome": None, "final_outcome": None,
-                    "epss_bin": epss_bin(percentile), "rule": "KEV_UNKNOWN", "status": "INCOMPLETE"})
+                    "epss_bin": epss_bin(percentile), "rule": reason, "status": "INCOMPLETE"})
         return row
-    base = mapping[(kev, pe, "Y", ti)]
+    base = mapping[(kev, pe, automatable, ti)]
     final, bin_name, rule = apply_amp(base, kev, percentile, amp)
     row.update({"base_outcome": base, "final_outcome": final,
                 "epss_bin": bin_name, "rule": rule, "status": "EVALUATED"})
     return row
 
 
-def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict, mapping: dict) -> dict:
+def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
+             mapping: dict, enrichment: dict | None = None) -> dict:
     if not isinstance(data, dict) or not isinstance(data.get("matches"), list):
         raise ValueError("Invalid Grype report: expected 'matches' array")
     if exposure not in ("public", "internal", "unknown"):
         raise ValueError(f"Invalid exposure: {exposure}")
-    findings = [make_decision(m, exposure, mapping, amp) for m in data["matches"]]
+    findings = [make_decision(m, exposure, mapping, amp, enrichment) for m in data["matches"]]
     ignored = []
     for match in (data.get("ignoredMatches") or []):
         v = match.get("vulnerability") or {}
@@ -172,10 +196,11 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict, mappi
         "admission": decision,
         "counts": dict(counts),
         "vex_ignored_count": len(ignored),
+        "vulnrichment_counts": dict(Counter(f["vulnrichment_status"] for f in findings)),
         "findings": findings,
         "ignored_matches": ignored,
         "warnings": [
-            "Vulnrichment values are not fetched: Automatable uses Y default; TI uses local CVSS3 heuristic/default.",
+            "CISA Vulnrichment ADP values are preferred; missing SSVC uses local defaults. Lookup failures require review.",
             "KEV=N is provisional based on absence from completed Grype DB enrichment; direct CISA catalog freshness is not separately verified.",
             "VEX ignore results must be reviewed for precise product/component scope before enforcement."
         ]
@@ -184,20 +209,36 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict, mappi
 
 def markdown_report(report: dict) -> str:
     esc = lambda x: str(x or "").replace("|", "\\|").replace("\n", " ")
-    lines = ["# CI Vulnerability Assessment", "",
-             f"- Image: `{esc(report['image'])}`",
-             f"- Admission: **{report['admission']}**",
-             f"- Base: `{report['model']}`",
-             f"- EPSS amplifier: `{report['amplifier']}`",
-             f"- VEX-suppressed findings: {report['vex_ignored_count']}", "",
-             "| CVE/advisory | Package | KEV | TI | EPSS bin | Base | Final | Source / guard |",
-             "|---|---|---|---|---|---|---|---|"]
+    lines = ["# CI Vulnerability Assessment", ""]
+    lines += ["## 1. Legend — how to read the scan table","","**Inputs and finding columns**","","| Column | Meaning |","|---|---|","| CVE/advisory | Vulnerability identifier reported by Grype; CVE is preferred when mapped. |","| Package | Name of the affected software component in the scanned image. |","| Severity | Scanner-reported Critical / High / Medium / Low. This does **not** directly decide the policy deadline. |","| KEV | CISA Known Exploited Vulnerabilities: `Y` = known exploited, `N` = not annotated by the refreshed Grype DB (provisional), `UNKNOWN` = could not resolve. |","| PE | Publicly Exposed: `Y` = public (or unknown default), `N` = declared internal. Context is supplied by the workflow, not proven by Grype. |","| Automatable | SSVC `Y` / `N`: whether exploitation can be automated; CISA Vulnrichment when available, otherwise `Y` default. |","| TI | SSVC Technical Impact: `P` = partial, `T` = total; CISA Vulnrichment when available, otherwise documented CVSS heuristic/default. |","| SSVC lookup | `FOUND` = CISA SSVC used; `NO_SSVC` / `NO_RECORD` = fallback used; `FETCH_ERROR` / `INVALID_SSVC` = needs review; `NO_CVE` / `NOT_QUERIED` = no applicable lookup. |","| EPSS bin | Exploit Prediction Scoring System **percentile**: Q1 = below 25th, Q2 = 25th–below 50th, Q3 = 50th–below 75th, Q4 = 75th–100th. Missing EPSS uses neutral Q2. |","| Base | Unchanged CISA BOD 26-04 decision, based on KEV, PE, Automatable and TI. |","| Final | Base after our local EPSS quartile policy and safety guards. This is the **remediation priority**, not the scanner severity. |","| Decision rule | Explains why the final result was calculated or retained; see below. |","","**Decision rule reference**","","| Rule | Meaning |","|---|---|","| `AMPLIFIED` | Applied our EPSS quartile table; the output may remain unchanged (for example Q2). |","| `KEV_GUARD` | KEV is `Y`; protect the original BOD result from EPSS changes. |","| `URGENT_BASE_GUARD` | BOD already returned 3D or 3DF; do not downgrade. |","| `EPSS_UNAVAILABLE_NEUTRAL` | EPSS missing; apply neutral Q2. Absence is not evidence of low risk. |","| `KEV_UNKNOWN` | CVE/KEV cannot be evaluated safely; needs review. |","| `VULNRICHMENT_LOOKUP_FAILED` | CISA SSVC lookup failed or returned invalid data; needs review. |","","**Outcome and admission reference**","","| Value | Interpretation |","|---|---|","| FSU | Fix on the next scheduled major upgrade/rebuild **and deployment**. |","| 60D / 14D / 3D | Remediation due within 60 / 14 / 3 days, respectively. |","| 3DF | Three-day outcome **plus forensic investigation/triage**; not proof of compromise. |","| ALLOW | No evaluated 3D/3DF and no incomplete findings. |","| BLOCK | At least one 3D or 3DF outcome; in `shadow` mode this is reported without failing the job. |","| REVIEW_REQUIRED | An essential input/enrichment is incomplete and no 3D/3DF finding already causes BLOCK. |","| VEX-suppressed | Grype moved the exact VEX-matched finding into `ignoredMatches`; it is excluded from the active gate but retained as evidence. |","","**Source vs rule:** Scanner source is Grype, SSVC inputs come from CISA Vulnrichment or documented fallbacks, and `Decision rule` describes how our policy was applied.",""]
+    lines += ["## 2. Scan results", "",
+              "- Image: `" + esc(report["image"]) + "`",
+              "- Admission: **" + esc(report["admission"]) + "**",
+              "- Base model: `" + esc(report["model"]) + "`",
+              "- EPSS amplifier: `" + esc(report["amplifier"]) + "`",
+              "- VEX-suppressed findings: " + str(report["vex_ignored_count"]), ""]
+    lines += ["| CVE/advisory | Package | Severity | KEV | PE | Automatable | TI | SSVC lookup | EPSS bin | Base | Final | Decision rule |","|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for finding in report["findings"]:
-        cells = [finding.get("cve") or finding.get("vulnerability_id"), finding.get("package"),
-                 finding.get("kev"), finding.get("technical_impact"), finding.get("epss_bin"),
-                 finding.get("base_outcome"), finding.get("final_outcome"), finding.get("rule")]
+        cells = [finding.get("cve") or finding.get("vulnerability_id"),
+                 finding.get("package"), finding.get("severity"), finding.get("kev"),
+                 finding.get("publicly_exposed"), finding.get("automatable"),
+                 finding.get("technical_impact"), finding.get("vulnrichment_status"),
+                 finding.get("epss_bin"), finding.get("base_outcome"),
+                 finding.get("final_outcome"), finding.get("rule")]
         lines.append("| " + " | ".join(esc(c) for c in cells) + " |")
-    lines += ["", "## Known MVP limits", ""] + [f"- {w}" for w in report["warnings"]]
+    if not report["findings"]:
+        lines.append("| No active findings | — | — | — | — | — | — | — | — | — | — | — |")
+    lines += ["","## 3. OpenVEX-suppressed findings","","VEX can change **applicability**, not the CVE severity. Only findings accepted by Grype's VEX matching are excluded from the active gate; the original records remain below.",""]
+    if report["ignored_matches"]:
+        lines += ["| Vulnerability | Package | Ignore evidence |","|---|---|---|"]
+        for item in report["ignored_matches"]:
+            reasons = "; ".join(str(x.get("namespace") or x.get("reason") or x)
+                                for x in item.get("applied_ignore_rules", []))
+            lines.append("| " + " | ".join(esc(x) for x in
+                [item.get("vulnerability_id"), item.get("package"), reasons or "unknown"]) + " |")
+    else:
+        lines.append("_No findings suppressed. Having a VEX document alone does not prove a statement matched._")
+    lines += ["", "## 4. Known MVP limits", ""] + ["- " + str(w) for w in report["warnings"]]
     return "\n".join(lines) + "\n"
 
 
@@ -206,13 +247,15 @@ def main() -> None:
     p.add_argument("--input", required=True)
     p.add_argument("--policy-dir", required=True)
     p.add_argument("--image", required=True)
+    p.add_argument("--vulnrichment", help="CVE Services CISA-ADP lookup JSON from fetch_vulnrichment.py")
     p.add_argument("--exposure", choices=("public", "internal", "unknown"), default="unknown")
     p.add_argument("--output", required=True)
     p.add_argument("--markdown", required=True)
     a = p.parse_args()
     base, amp, mapping = load_policy(Path(a.policy_dir))
     data = json.loads(Path(a.input).read_text(encoding="utf-8"))
-    report = evaluate(data, a.exposure, a.image, base, amp, mapping)
+    enrichment = json.loads(Path(a.vulnrichment).read_text(encoding="utf-8")) if a.vulnrichment else None
+    report = evaluate(data, a.exposure, a.image, base, amp, mapping, enrichment)
     Path(a.output).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     Path(a.markdown).write_text(markdown_report(report), encoding="utf-8")
     print(report["admission"])

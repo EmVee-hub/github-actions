@@ -10,7 +10,7 @@ Prerequisites in the calling job:
 - Linux runner with Python 3.10+, Docker (or another Grype-supported image source) and Grype CLI.
 - Source and `vex/openvex.json` checked out.
 - The candidate image built locally in the same job.
-- Network access to refresh Grype's vulnerability DB.
+- Network access to refresh Grype's vulnerability DB and to query public CVE Services (`cveawg.mitre.org`).
 - Access to the private action repository (if private).
 
 Parameters:
@@ -32,22 +32,36 @@ Outputs: `admission` (`ALLOW`, `BLOCK`, `REVIEW_REQUIRED`), `report-json`, `repo
 2. Update the Grype vulnerability DB; fail if unavailable.
 3. Scan the image with `--by-cve --vex ... --output json`, using an explicit empty ignore config.
 4. Ignore `ignoredMatches` for the gate, but retain them in reports.
-5. Compute BOD 26-04 outcomes using local defaults and CVSS v3 Technical Impact heuristic.
-6. Apply the local EPSS quartile amplifier and the KEV / 3D / 3DF guards.
-7. Produce Grype JSON, decision JSON and Markdown summary.
-8. In `shadow` mode, report blocking policy decisions without failing. In `enforce`, fail unless decision is `ALLOW`.
+5. Look up distinct unsuppressed CVEs in CISA's ADP Vulnrichment data via CVE Services.
+6. Compute BOD 26-04 outcomes using published SSVC Automatable and Technical Impact when present; otherwise use our defaults.
+7. Apply the local EPSS quartile amplifier and the KEV / 3D / 3DF guards.
+8. Produce Grype, Vulnrichment, decision JSON and Markdown summary.
+9. In `shadow` mode, report blocking policy decisions without failing. In `enforce`, fail unless decision is `ALLOW`.
 
 ### Policy and safety limits
 
 - The BOD table is a semantic copy of the 16 outcomes of `cisa:DT_BOD2604:1.0.0`, **not the original repository's schema**.
-- `Automatable` always defaults to `Y` in this MVP; Vulnrichment ADP lookup is **not implemented**.
-- Technical Impact: `T` only when a usable CVSS v3 vector contains both `C:H` and `I:H`; otherwise `P` for known C/I or conservative `T` if unavailable. It is a **local heuristic**.
+- `Automatable` uses the published CISA-ADP SSVC value when available; otherwise defaults to `Y`.
+- Technical Impact: prefer CISA-ADP SSVC; otherwise use the **local heuristic** `T` when CVSS v3 has both `C:H` and `I:H`, `P` for other known C/I, or conservative `T` if unavailable.
 - `KEV=Y` if Grype has nonempty `knownExploited`. If the ID maps to a CVE but no KEV annotation is present, `KEV=N` is **provisional** based on Grype's database, not independently validated against the live CISA catalog. If there is no CVE mapping, `KEV=UNKNOWN` and the action reports `REVIEW_REQUIRED`.
 - Missing EPSS is neutral Q2 with source recorded.
 - This uses policy evaluation only; it does **not** validate that an exposure declaration matches actual networking.
 - OpenVEX statements must be reviewed before being accepted; the sanity check doesn't validate signatures, scope or whether technical justifications are true.
-- The action intentionally does **not** implement a direct Vulnrichment API, VEX attestation verification, exposure inventory or production image digest promotion. Those are important gaps before broad production enforcement.
+- CISA SSVC lookup failures (network errors or invalid payload) produce `REVIEW_REQUIRED`, not a silent fallback. No assessment / 404 uses the documented defaults. VEX attestation verification, exposure inventory and production digest promotion remain gaps before enforcement.
 - A `3DF` finding requires incident/forensic follow-up. A blocked CI candidate alone is not proof of existing compromise.
+
+## CISA Vulnrichment
+
+The action queries `https://cveawg.mitre.org/api/cve/<CVE-ID>` for each unique CVE in unsuppressed Grype matches. It reads SSVC metrics **only** from the CISA-ADP provider (short name and the published CISA ADP organisation ID). Extracted values and source timestamps are recorded in `security-reports/vulnrichment.json`.
+
+| CISA lookup | Action |
+|---|---|
+| Found | Use CISA Automatable and Technical Impact |
+| No SSVC or 404 | Use the documented local defaults |
+| Timeout, HTTP 429/5xx or invalid published SSVC | `REVIEW_REQUIRED` |
+| No CVE mapping | `REVIEW_REQUIRED` under existing KEV-UNKNOWN policy |
+
+Do not equate SSVC `Exploitation: none` with `KEV=N`. A CVE lookup is **not** an independent KEV catalog verification.
 
 ## Run tests
 
@@ -69,11 +83,11 @@ python3 scripts/evaluate.py \
 
 ## Next steps before enforcement
 
-1. Replace the calling workflow's `YOUR_ORG` and `REPLACE_WITH_FULL_COMMIT_SHA` values.
+1. Pin the caller to the reviewed commit SHA of `EmVee-hub/github-actions`.
 2. Pin Anchore's Grype downloader action by its audited immutable SHA, and pin Grype itself.
 3. Run the action in `shadow` mode across representative images.
 4. Validate Grype JSON compatibility with the exact installed Grype version and representative GHSA/CVE matches.
-5. Review effects of default `Publicly Exposed=Y`, `Automatable=Y`, and CVSS-based TI.
+5. Review which findings use CISA-supplied SSVC and which use defaults; live API requests still require a runner smoke test.
 6. Define a safe way to change `mode` to `enforce`, with monitored failure behavior.
 7. Implement a promotion step that verifies the evaluated image is the immutable image digest being deployed.
 
