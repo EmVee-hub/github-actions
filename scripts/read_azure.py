@@ -69,10 +69,22 @@ def collect(subscription, query, send=request):
         tokens.add(token)
 
 
+# Only Microsoft Defender container IMAGE assessment resource categories.
+# Any unrecognized/non-container resource type is out of scope until verified.
+CONTAINER_RESOURCE_TYPES = frozenset({"k8s-container", ".containerimage", "container-image"})
+
+
+def is_container_image(row):
+    details = (row.get("properties") or {}).get("resourceDetails") or {}
+    return str(details.get("ResourceType") or "").lower() in CONTAINER_RESOURCE_TYPES
+
+
 def normalize(rows):
     """Provisional CVE observations. Missing product identity explicitly prevents evaluation."""
     observations, unresolved = [], []
     for row in rows:
+        if not is_container_image(row):
+            continue  # VM/node/general SoftwareUpdate assessments are outside container scope
         p = row['properties']
         additional = p.get('additionalData') or {}
         cves = additional.get('CvesDetails')
@@ -154,7 +166,9 @@ def main():
     try:
         if args.input:
             all_rows = load_input(args.input)
-            write(args.out / 'input.raw.json', all_rows)
+            # Offline input is filtered too: retain container-only evidence.
+            write(args.out / 'input.raw.json',
+                  [row for row in all_rows if is_container_image(row)])
             for subscription, count in Counter(row['subscriptionId'] for row in all_rows).items():
                 summary['subscriptions'].append({'id': subscription, 'assessment_count': count})
         else:
@@ -169,10 +183,15 @@ def main():
                 all_rows.extend(rows)
                 summary['subscriptions'].append({'id': subscription, 'assessment_count': len(rows)})
         observations, unresolved = normalize(all_rows)
+        container_rows = [row for row in all_rows if is_container_image(row)]
+        excluded_count = len(all_rows) - len(container_rows)
+        # Do not persist non-container provider findings in the normal outputs.
+        # Raw evidence is collected only for the query's restricted resource class.
         write(args.out / 'observations.json', observations)
         write(args.out / 'unresolved.json', unresolved)
         summary.update(collection_status='COMPLETE', assessment_count=len(all_rows),
                        observation_count=len(observations), unresolved_count=len(unresolved),
+                       excluded_noncontainer_count=excluded_count,
                        resource_types=dict(Counter(str((r['properties'].get('resourceDetails') or {}).get('ResourceType', 'UNKNOWN')) for r in all_rows)))
         # A completed extraction is never evidence of complete runtime/security coverage.
         return 0
