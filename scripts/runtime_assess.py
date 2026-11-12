@@ -201,7 +201,7 @@ def evaluate_row(obs: dict, workload: dict, intel: dict, vex_docs: dict,
         base = mapping[(kev, row["publicly_exposed"], auto, ti)]
         bin_name = epss_bin(pct)
         final, rule = poc_priority(base, kev, epss.get("probability")
-                                   if epss["status"] == "FOUND" else None)
+                                   if epss["status"] == "FOUND" else None, amp)
     except (KeyError, TypeError, ValueError):
         reasons.append("DECISION_INPUT_INVALID")
         return row
@@ -259,7 +259,7 @@ def assess(inspector: dict | None, defender: list | None, inventories: list[dict
             results.append(evaluate_row(observation, workload, intel, vex_docs, mapping, amp))
     return {
         "schema_version": "runtime-assessment/1.0", "policy_model": "cisa:DT_BOD2604:1.0.0",
-        "policy_amplifier": "LOCAL:EPSS_PROBABILITY_5_10:1.0.0", "intelligence_fetched_at": intel.get("fetched_at"),
+        "policy_amplifier": amp["probability_policy"]["id"], "intelligence_fetched_at": intel.get("fetched_at"),
         "inventory_modes": sorted(set(i.get("mode", "UNKNOWN") for i in inventories)),
         "runtime_workloads_observed": len(workloads),
         "runtime_inventory_unresolved": unresolved,

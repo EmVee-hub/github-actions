@@ -163,3 +163,5 @@ technical feasibility. Live-cloud coverage, approved VEX provenance, policy
 calibration, dispositions and enforcement remain MVP work.
 
 
+
+The PoC thresholds, KEV outcomes and non-KEV fallbacks are configured in `policy/epss-amplifier.json` under `probability_policy`. Thresholds use EPSS probability fractions and must be listed in descending order. The existing quartile table supports legacy callers. Both CI and runtime load this file.

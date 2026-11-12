@@ -31,6 +31,23 @@ def load_policy(policy_dir: Path) -> tuple[dict, dict, dict]:
     for per_bin in amp["table"].values():
         if set(per_bin) != {"Q1", "Q2", "Q3", "Q4"}:
             raise ValueError("Each amplifier row must cover Q1..Q4")
+    policy = amp["probability_policy"]
+    if not policy.get("id"):
+        raise ValueError("Probability policy needs an id")
+    if policy["kev"]["default"] not in ("3D", "3DF") or policy["kev"]["preserve"] != ["3DF"]:
+        raise ValueError("KEV policy must remain urgent and preserve 3DF")
+    rules = policy["non_kev"]
+    allowed = {"FSU", "60D", "30D"}
+    if rules["default"] not in allowed or rules["missing"] not in allowed:
+        raise ValueError("Invalid non-KEV fallback")
+    previous = 2
+    for threshold in rules["thresholds"]:
+        value = threshold["minimum_probability"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1 or value >= previous:
+            raise ValueError("EPSS thresholds must be unique, descending probabilities")
+        if threshold["outcome"] not in allowed:
+            raise ValueError("Invalid non-KEV outcome")
+        previous = value
     return base, amp, mapping
 
 
@@ -173,26 +190,31 @@ def make_decision(match: dict, exposure: str, mapping: dict, amp: dict,
     return row
 
 
-def poc_priority(base: str, kev: str, probability: float | str | None) -> tuple[str, str]:
+def poc_priority(base: str, kev: str, probability: float | str | None,
+                 amp: dict) -> tuple[str, str]:
+    policy = amp["probability_policy"]
     if kev == "Y":
-        return ("3DF" if base == "3DF" else "3D"), "POC_KEV_URGENT"
-    score = float(probability) if probability is not None else 0
+        target = base if base in policy["kev"]["preserve"] else policy["kev"]["default"]
+        return target, "POC_KEV_URGENT"
+    rules = policy["non_kev"]
+    if probability is None:
+        return rules["missing"], "POC_EPSS_PROBABILITY"
+    score = float(probability)
     if not 0 <= score <= 1:
         raise ValueError(f"Invalid EPSS probability: {score}")
-    if score >= .10:
-        return "30D", "POC_EPSS_PROBABILITY"
-    if score >= .05:
-        return "60D", "POC_EPSS_PROBABILITY"
-    return "FSU", "POC_EPSS_PROBABILITY"
+    for threshold in rules["thresholds"]:
+        if score >= threshold["minimum_probability"]:
+            return threshold["outcome"], "POC_EPSS_PROBABILITY"
+    return rules["default"], "POC_EPSS_PROBABILITY"
 
 
-def apply_poc_policy(row: dict) -> None:
+def apply_poc_policy(row: dict, amp: dict) -> None:
     """Apply the local KEV/EPSS targets while preserving the BOD result."""
     row["quartile_outcome"] = row["final_outcome"]
     if row["status"] == "INCOMPLETE":
         row.update(admission="REVIEW_REQUIRED", admission_reason=row["rule"])
         return
-    target, rule = poc_priority(row["base_outcome"], row["kev"], row["epss_probability"])
+    target, rule = poc_priority(row["base_outcome"], row["kev"], row["epss_probability"], amp)
     row.update(final_outcome=target, rule=rule,
                admission="BLOCK" if row["kev"] == "Y" else "ALLOW",
                admission_reason=rule if row["kev"] == "Y" else "POC_NON_KEV_SCHEDULED")
@@ -243,7 +265,7 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
     findings = [make_decision(m, exposure, mapping, amp, enrichment) for m in data["matches"]]
     for finding in findings:
         if poc_kev_epss:
-            apply_poc_policy(finding)
+            apply_poc_policy(finding, amp)
     ignored = []
     for match in (data.get("ignoredMatches") or []):
         v = match.get("vulnerability") or {}
@@ -267,7 +289,7 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
                             else "UNKNOWN_DEFAULT_PUBLIC"),
         "assessed_at": datetime.now(timezone.utc).isoformat(),
         "model": base["id"],
-        "amplifier": "LOCAL:EPSS_PROBABILITY_5_10:1.0.0" if poc_kev_epss else amp["id"],
+        "amplifier": amp["probability_policy"]["id"] if poc_kev_epss else amp["id"],
         "admission": decision,
         "admission_policy": ("LOCAL:POC_KEV_EPSS:1.0.0" if poc_kev_epss
                              else "LOCAL:QUARTILE_CI:1.0.0"),
