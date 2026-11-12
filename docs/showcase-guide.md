@@ -33,3 +33,17 @@ Excluded findings could not be tied to a running image: `IMAGE_IDENTITY_INCOMPLE
 Provider summaries show observations **before** runtime evaluation. Azure's unknown digest/package fields are visible gaps, not zero findings. Inspector usage counts alone do not establish EKS runtime coverage.
 
 No workloads are changed or stopped. Inspect the uploaded JSON artifacts for complete source and identity evidence. Start a **new workflow run** on the updated branch to see changes; rerunning an old run retains its old workflow revision.
+
+
+## Expected security issues in this synthetic run
+
+A green job means the program ran and its assertions passed; it does not mean zero vulnerabilities. Warning annotations highlight the deliberately affected examples.
+
+| Runtime example | Expected result |
+|---|---|
+| AWS payments-abc | Active 3D finding after EPSS amplification |
+| AWS billing-abc | Active 14D finding; KEV base outcome preserved |
+| Azure customer-api-abc | Active 3DF finding, no VEX exception; remediation and forensic follow-up indicated |
+| Azure internal-tools-abc | Same CVE, different image/project: suppressed by its exact scoped VEX statement |
+
+The Azure active example uses prepared runtime identity, not an improvement to live Defender identity extraction. Missing-identity and unmatched-image examples remain excluded and counted. The runtime report does not enforce deployment admission or stop workloads.

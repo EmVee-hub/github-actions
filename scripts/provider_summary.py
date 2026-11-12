@@ -19,8 +19,11 @@ def render(provider, directory):
     lines = [f"## {title} normalization (synthetic)", "",
              "Synthetic fixture data only; no cloud credentials or live collection.", "",
              "These are provider observations, before runtime correlation, VEX and BOD/EPSS.", ""]
+    lines += ["**A successful job means processing succeeded, not that the images are safe.**", ""]
     if provider == "inspector":
         rows = read("normalized-findings.json")["findings"]
+        active = sum(r.get("provider_status") == "ACTIVE" for r in rows)
+        lines += [f"**Security findings: {active} ACTIVE provider observations require assessment.**", ""]
         lines += [f"Normalized package findings: **{len(rows)}**. Distinct vulnerability IDs: **{len({r.get('vulnerability_id') for r in rows})}**.", "",
                   "| Vulnerability | Package | Version | Severity | Provider status | Repository | Provider usage hint |",
                   "|---|---|---|---|---|---|---|"]
@@ -35,6 +38,8 @@ def render(provider, directory):
                   "Full image digests and raw evidence: `poc-inspector-synthetic` artifact."]
     else:
         rows, unresolved, summary = read("observations.json"), read("unresolved.json"), read("summary.json")
+        unhealthy = sum(r.get("provider_status") == "Unhealthy" for r in rows)
+        lines += [f"**Security findings: {unhealthy} Unhealthy CVE observations reported. Missing identity prevents prioritization, not detection.**", ""]
         lines += [f"CVE observations: **{len(rows)}**. Unresolved assessments: **{len(unresolved)}**. Excluded non-container assessments: **{summary.get('excluded_noncontainer_count', 0)}**.", "",
                   "| CVE | Severity | Provider status | Detected versions | Image digest | Package PURL | Evaluation |",
                   "|---|---|---|---|---|---|---|"]
@@ -60,3 +65,4 @@ if __name__ == "__main__":
     parser.add_argument("--directory", type=Path, required=True)
     args = parser.parse_args()
     print(render(args.provider, args.directory), end="")
+

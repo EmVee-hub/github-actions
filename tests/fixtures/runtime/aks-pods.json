@@ -35,6 +35,41 @@
           }
         ]
       }
+    },
+    {
+      "metadata": {
+        "name": "customer-api-abc",
+        "namespace": "prod",
+        "uid": "uid-customer-api-abc",
+        "labels": {
+          "security.example.com/project": "customer-api",
+          "security.example.com/exposure": "public",
+          "security.example.com/prod-critical": "true"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "app",
+            "image": "demo.azurecr.io/customer/api:test"
+          }
+        ]
+      },
+      "status": {
+        "phase": "Running",
+        "containerStatuses": [
+          {
+            "name": "app",
+            "image": "demo.azurecr.io/customer/api:test",
+            "imageID": "docker-pullable://demo.azurecr.io/customer/api@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "state": {
+              "running": {
+                "startedAt": "2026-11-12T00:00:00Z"
+              }
+            }
+          }
+        ]
+      }
     }
   ]
 }

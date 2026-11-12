@@ -51,6 +51,7 @@ jobs:
             --inventory "$OUT/eks.json" "$OUT/aks.json" \
             --intel "$FIX/intelligence.json" --vex-map "$FIX/vex-map.json" \
             --output "$OUT/decisions.json" --markdown "$OUT/report.md"
+          echo '::warning title=Synthetic active security findings::This fixture includes an active AWS 3D finding and an active Azure 3DF finding. Passing the demo means the expected issues were detected; it does not mean the images are safe.'
           cat "$OUT/report.md" >> "$GITHUB_STEP_SUMMARY"
           echo '**SYNTHETIC fixture only — does not prove live cloud coverage.**' >> "$GITHUB_STEP_SUMMARY"
       - name: Regression tests
@@ -79,6 +80,7 @@ jobs:
           python3 scripts/collect_inspector.py \
             --input-file tests/fixtures/inspector-debug.json \
             --output "$RUNNER_TEMP/poc-inspector"
+          echo '::warning title=Inspector synthetic security findings::The fixture contains ACTIVE package vulnerabilities. Normalization success is not a clean security verdict; see the findings table.'
           python3 scripts/provider_summary.py --provider inspector --directory "$RUNNER_TEMP/poc-inspector" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload synthetic Inspector normalization
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -105,6 +107,7 @@ jobs:
           python3 scripts/read_azure.py \
             --input tests/fixtures/defender-sample.json \
             --out "$RUNNER_TEMP/poc-defender"
+          echo '::warning title=Defender synthetic security findings::The fixture contains an Unhealthy CVE observation as well as an unresolved assessment. Missing image identity prevents prioritization, not detection.'
           python3 scripts/provider_summary.py --provider defender --directory "$RUNNER_TEMP/poc-defender" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload synthetic Defender normalization
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -113,4 +116,5 @@ jobs:
           path: ${{ runner.temp }}/poc-defender/
           if-no-files-found: error
           retention-days: 7
+
 
