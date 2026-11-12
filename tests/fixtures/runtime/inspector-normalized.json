@@ -1,0 +1,79 @@
+{
+  "findings": [
+    {
+      "observation_id": "synthetic-inspector-1",
+      "finding_arn": "arn:example:inspector:finding/1",
+      "source": "aws-inspector",
+      "account_id": "123456789012",
+      "region": "eu-north-1",
+      "provider_status": "ACTIVE",
+      "vulnerability_id": "CVE-2021-45105",
+      "severity": "HIGH",
+      "asset": {
+        "type": "AWS_ECR_CONTAINER_IMAGE",
+        "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "repository": "payments/api",
+        "registry": "123456789012"
+      },
+      "runtime": {
+        "in_use_count": 0
+      },
+      "package": {
+        "name": "log4j-core",
+        "version": "2.14.1",
+        "purl": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1"
+      },
+      "cvss": []
+    },
+    {
+      "observation_id": "synthetic-inspector-2",
+      "finding_arn": "arn:example:inspector:finding/2",
+      "source": "aws-inspector",
+      "account_id": "123456789012",
+      "region": "eu-north-1",
+      "provider_status": "ACTIVE",
+      "vulnerability_id": "CVE-2021-45046",
+      "severity": "CRITICAL",
+      "asset": {
+        "type": "AWS_ECR_CONTAINER_IMAGE",
+        "image_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "repository": "billing/api",
+        "registry": "123456789012"
+      },
+      "runtime": {
+        "in_use_count": 1
+      },
+      "package": {
+        "name": "log4j-core",
+        "version": "2.14.1",
+        "purl": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1"
+      },
+      "cvss": []
+    },
+    {
+      "observation_id": "synthetic-inspector-stale",
+      "finding_arn": "arn:example:inspector:finding/stale",
+      "source": "aws-inspector",
+      "account_id": "123456789012",
+      "region": "eu-north-1",
+      "provider_status": "ACTIVE",
+      "vulnerability_id": "CVE-2021-45105",
+      "severity": "HIGH",
+      "asset": {
+        "type": "AWS_ECR_CONTAINER_IMAGE",
+        "image_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "repository": "payments/api",
+        "registry": "123456789012"
+      },
+      "runtime": {
+        "in_use_count": 0
+      },
+      "package": {
+        "name": "log4j-core",
+        "version": "2.14.1",
+        "purl": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1"
+      },
+      "cvss": []
+    }
+  ]
+}

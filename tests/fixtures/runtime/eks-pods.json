@@ -1,0 +1,40 @@
+{
+  "kind": "PodList",
+  "items": [
+    {
+      "metadata": {
+        "name": "payments-abc",
+        "namespace": "prod",
+        "uid": "uid-payments-abc",
+        "labels": {
+          "security.example.com/project": "payments",
+          "security.example.com/exposure": "public",
+          "security.example.com/prod-critical": "true"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "app",
+            "image": "123456789012.dkr.ecr.eu-north-1.amazonaws.com/payments/api:test"
+          }
+        ]
+      },
+      "status": {
+        "phase": "Running",
+        "containerStatuses": [
+          {
+            "name": "app",
+            "image": "123456789012.dkr.ecr.eu-north-1.amazonaws.com/payments/api:test",
+            "imageID": "docker-pullable://123456789012.dkr.ecr.eu-north-1.amazonaws.com/payments/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "state": {
+              "running": {
+                "startedAt": "2026-11-12T00:00:00Z"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

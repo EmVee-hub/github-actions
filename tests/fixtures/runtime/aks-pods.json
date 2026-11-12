@@ -1,0 +1,40 @@
+{
+  "kind": "PodList",
+  "items": [
+    {
+      "metadata": {
+        "name": "internal-tools-abc",
+        "namespace": "prod",
+        "uid": "uid-internal-tools-abc",
+        "labels": {
+          "security.example.com/project": "tools",
+          "security.example.com/exposure": "internal",
+          "security.example.com/prod-critical": "true"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "app",
+            "image": "demo.azurecr.io/tools/service:test"
+          }
+        ]
+      },
+      "status": {
+        "phase": "Running",
+        "containerStatuses": [
+          {
+            "name": "app",
+            "image": "demo.azurecr.io/tools/service:test",
+            "imageID": "docker-pullable://demo.azurecr.io/tools/service@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "state": {
+              "running": {
+                "startedAt": "2026-11-12T00:00:00Z"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

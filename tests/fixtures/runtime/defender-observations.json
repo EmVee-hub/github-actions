@@ -1,0 +1,36 @@
+[
+  {
+    "schema_version": "defender-observation/0.1",
+    "source": "azure-defender-for-cloud",
+    "assessment_id": "synthetic-defender-container-1",
+    "subscription_id": "11111111-1111-1111-1111-111111111111",
+    "vulnerability_id": "CVE-2021-44228",
+    "provider_status": "Unhealthy",
+    "severity": "Critical",
+    "image_digest": null,
+    "resource_details": {
+      "ResourceType": "container-image",
+      "imageDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "registry": "demo.azurecr.io",
+      "repository": "tools/service"
+    },
+    "package_name": "log4j-core",
+    "package_version": "2.14.1",
+    "package_purl": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1",
+    "cvss": []
+  },
+  {
+    "schema_version": "defender-observation/0.1",
+    "source": "azure-defender-for-cloud",
+    "assessment_id": "synthetic-defender-unknown-identity",
+    "subscription_id": "11111111-1111-1111-1111-111111111111",
+    "vulnerability_id": "CVE-2021-44228",
+    "provider_status": "Unhealthy",
+    "severity": "High",
+    "image_digest": null,
+    "resource_details": {
+      "ResourceType": "container-image"
+    },
+    "package_purl": null
+  }
+]
