@@ -29,6 +29,8 @@ def observations(inspector: dict | None, defender: list | None) -> list[dict]:
             if not isinstance(row, dict):
                 raise ValueError("Invalid Inspector row")
             a = row.get("asset") or {}
+            if a.get("type") != "AWS_ECR_CONTAINER_IMAGE":
+                continue  # Hosts, VMs and other AWS resource findings are out of scope.
             package = row.get("package") or {}
             out.append({
                 "source": "AWS_INSPECTOR", "observation_id": row.get("observation_id"),
@@ -49,6 +51,9 @@ def observations(inspector: dict | None, defender: list | None) -> list[dict]:
             if not isinstance(row, dict):
                 raise ValueError("Invalid Defender observation")
             details = row.get("resource_details") or {}
+            if str(details.get("ResourceType") or "").lower() not in (
+                    "k8s-container", ".containerimage", "container-image"):
+                continue  # Ignore generic Defender assessments and VM/node records.
             # Only explicitly structured registry identities are accepted. Existing
             # Defender observations mostly have no digest: they remain unresolved.
             out.append({
@@ -233,16 +238,14 @@ def assess(inspector: dict | None, defender: list | None, inventories: list[dict
         raise ValueError("Incomplete intelligence snapshot")
     _, amp, mapping = load_policy(policy_dir)
     results = []
+    excluded = Counter()
+    # This assessment intentionally contains ONLY findings linked to running containers.
+    # Registry-only images and incomplete image identities contribute to excluded
+    # totals, never to the list of active runtime vulnerabilities.
     for observation in observations(inspector, defender):
         running, correlation = join(observation, workloads)
         if not running:
-            results.append({
-                "source": observation["source"], "observation_id": observation["observation_id"],
-                "cve": observation["cve"], "severity": observation["severity"],
-                "repository": observation.get("repository"), "image_digest": observation.get("image_digest"),
-                "correlation_status": correlation, "decision_status": "NOT_EVALUATED",
-                "reasons": [correlation],
-            })
+            excluded[correlation] += 1
             continue
         for workload in running:
             results.append(evaluate_row(observation, workload, intel, vex_docs, mapping, amp))
@@ -252,10 +255,14 @@ def assess(inspector: dict | None, defender: list | None, inventories: list[dict
         "inventory_modes": sorted(set(i.get("mode", "UNKNOWN") for i in inventories)),
         "runtime_workloads_observed": len(workloads),
         "runtime_inventory_unresolved": unresolved,
+        "excluded_uncorrelated_observations": sum(excluded.values()),
+        "excluded_by_reason": dict(excluded),
         "observations": results,
         "counts": dict(Counter(r["decision_status"] for r in results)),
         "notes": [
             "A running image is not the same as a confirmed exploitable vulnerability.",
+            "Only running container observations are assessed; other image findings are not included.",
+            "Excluded image findings do not establish scan coverage or remediation.",
             "Registry/ECR coverage and freshness are NOT established by this join.",
             "A preliminary BOD outcome on REVIEW_REQUIRED does not authorize closing a finding.",
             "3DF requires forensic triage; this workflow never terminates workloads.",
@@ -265,7 +272,8 @@ def assess(inspector: dict | None, defender: list | None, inventories: list[dict
 
 def markdown_report(report: dict) -> str:
     lines = [
-        "# Runtime vulnerability correlation and BOD/EPSS report", "",
+        "# Running container vulnerability assessment — BOD/EPSS", "",
+        "**Only CVEs tied to RUNNING Pod/ECS containers are listed.**", "",
         "**No runtime actions taken. Evidence/correlation does not prove complete coverage.**", "",
         "| Provider | Workload | CVE | Severity | Correlation | VEX | KEV | PE | EPSS bin | Base | Final | Status / reason |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|",
@@ -279,10 +287,13 @@ def markdown_report(report: dict) -> str:
         cells[-1] = e(cells[-1]) + ": " + ",".join(item.get("reasons") or [])
         lines.append("| " + " | ".join(e(c) for c in cells) + " |")
     if not report["observations"]:
-        lines.append("| No provider findings | — | — | — | — | — | — | — | — | — | — | INCOMPLETE_COVERAGE |")
+        lines.append("| No correlated running-container findings | — | — | — | — | — | — | — | — | — | — | COVERAGE_UNVERIFIED |")
     lines += ["", "## Summary", "",
               "Observed workload containers with eligible manifest digest: **" + str(report["runtime_workloads_observed"]) + "**.",
               "Unresolved workload containers: **" + str(len(report["runtime_inventory_unresolved"])) + "**.",
+              "Provider findings excluded (not correlated to running containers): **"
+                  + str(report["excluded_uncorrelated_observations"]) + "**.",
+              "Exclusion breakdown: `" + json.dumps(report["excluded_by_reason"], sort_keys=True) + "`.",
               "Decision statuses: `" + json.dumps(report["counts"], sort_keys=True) + "`.", "",
               "For full source, workload identity and SSVC evidence inspect the JSON artifact.",
               "A missing provider finding is **never** a verified clean workload."]

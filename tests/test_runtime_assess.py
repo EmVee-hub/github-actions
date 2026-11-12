@@ -118,39 +118,42 @@ class RuntimePolicyTests(unittest.TestCase):
         azure = defender()
         azure[0]["resource_details"]["ResourceType"] = "microsoft.compute/virtualmachines"
         result = run(defender_data=azure, inventories=[inventory(workload("AKS"))])
-        self.assertEqual(result["observations"][0]["correlation_status"], "NON_CONTAINER_ASSET")
+        self.assertEqual(result["observations"], [])
+        self.assertEqual(result["excluded_uncorrelated_observations"], 0)
 
     def test_defender_aws_origin_cannot_attach_to_aks(self):
         azure = defender()
         azure[0]["resource_details"]["ResourceType"] = "K8s-container"
         azure[0]["resource_details"]["Source"] = "AWS"
         result = run(defender_data=azure, inventories=[inventory(workload("AKS"))])
-        self.assertEqual(result["observations"][0]["correlation_status"], "PROVIDER_SCOPE_MISMATCH")
+        self.assertEqual(result["excluded_by_reason"]["PROVIDER_SCOPE_MISMATCH"], 1)
     def test_defender_missing_digest_remains_unresolved(self):
         x = defender()
         x[0]["resource_details"].pop("imageDigest")
-        row = run(defender_data=x, inventories=[inventory(workload("AKS"))])["observations"][0]
-        self.assertEqual(row["correlation_status"], "IMAGE_IDENTITY_INCOMPLETE")
-        self.assertEqual(row["decision_status"], "NOT_EVALUATED")
+        result = run(defender_data=x, inventories=[inventory(workload("AKS"))])
+        self.assertEqual(result["observations"], [])
+        self.assertEqual(result["excluded_by_reason"]["IMAGE_IDENTITY_INCOMPLETE"], 1)
 
     def test_other_digest_not_running(self):
-        row = run(inspector(digest=D2))["observations"][0]
-        self.assertEqual(row["correlation_status"], "NO_EXACT_RUNTIME_MATCH")
-        self.assertEqual(row["decision_status"], "NOT_EVALUATED")
+        result = run(inspector(digest=D2))
+        self.assertEqual(result["observations"], [])
+        self.assertEqual(result["excluded_by_reason"]["NO_EXACT_RUNTIME_MATCH"], 1)
 
     def test_other_repo_not_running(self):
-        row = run(inspector(repo="other/api"))["observations"][0]
-        self.assertEqual(row["correlation_status"], "NO_EXACT_RUNTIME_MATCH")
+        result = run(inspector(repo="other/api"))
+        self.assertEqual(result["observations"], [])
+        self.assertEqual(result["excluded_by_reason"]["NO_EXACT_RUNTIME_MATCH"], 1)
 
     def test_account_region_mismatch(self):
         wrong = workload()
         wrong["account_id"] = "999999999999"
-        row = run(inspector(), inventories=[inventory(wrong)])["observations"][0]
-        self.assertEqual(row["correlation_status"], "NO_EXACT_RUNTIME_MATCH")
+        result = run(inspector(), inventories=[inventory(wrong)])
+        self.assertEqual(result["observations"], [])
+        self.assertEqual(result["excluded_by_reason"]["NO_EXACT_RUNTIME_MATCH"], 1)
         wrong["account_id"] = ACCT
         wrong["region"] = "us-east-1"
-        self.assertEqual(run(inspector(), inventories=[inventory(wrong)])["observations"][0]["correlation_status"],
-                         "NO_EXACT_RUNTIME_MATCH")
+        self.assertEqual(run(inspector(), inventories=[inventory(wrong)])["excluded_by_reason"]
+                         ["NO_EXACT_RUNTIME_MATCH"], 1)
 
     def test_two_running_workloads_receive_separate_observations(self):
         second = workload()
@@ -233,8 +236,9 @@ class RuntimePolicyTests(unittest.TestCase):
     def test_host_finding_never_joins_ecr_image(self):
         data = inspector()
         data["findings"][0]["asset"]["type"] = "AWS_EC2_INSTANCE"
-        row = run(data)["observations"][0]
-        self.assertEqual(row["correlation_status"], "NON_CONTAINER_ASSET")
+        result = run(data)
+        self.assertEqual(result["observations"], [])
+        self.assertEqual(result["excluded_uncorrelated_observations"], 0)
 
     def test_missing_vex_mapping_needs_review(self):
         row = run(inspector(), vex={})["observations"][0]

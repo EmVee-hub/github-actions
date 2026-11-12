@@ -41,17 +41,17 @@ class RuntimePipelineTests(unittest.TestCase):
             results = json.loads((dest / "results.json").read_text())
             self.assertEqual(results["inventory_modes"], ["OFFLINE"])
             self.assertEqual(results["runtime_workloads_observed"], 3)
-            self.assertEqual(results["counts"], {"EVALUATED": 2, "SUPPRESSED_BY_VEX": 1,
-                                                "NOT_EVALUATED": 2})
+            self.assertEqual(results["counts"], {"EVALUATED": 2, "SUPPRESSED_BY_VEX": 1})
+            self.assertEqual(results["excluded_uncorrelated_observations"], 2)
+            self.assertEqual(results["excluded_by_reason"],
+                             {"NO_EXACT_RUNTIME_MATCH": 1, "IMAGE_IDENTITY_INCOMPLETE": 1})
             rows = {r["observation_id"]: r for r in results["observations"]}
             self.assertEqual(rows["synthetic-inspector-1"]["final_outcome"], "3D")
             self.assertEqual(rows["synthetic-inspector-2"]["decision_rule"], "KEV_GUARD")
             self.assertEqual(rows["synthetic-defender-container-1"]["decision_status"],
                              "SUPPRESSED_BY_VEX")
-            self.assertEqual(rows["synthetic-inspector-stale"]["correlation_status"],
-                             "NO_EXACT_RUNTIME_MATCH")
-            self.assertEqual(rows["synthetic-defender-unknown-identity"]["correlation_status"],
-                             "IMAGE_IDENTITY_INCOMPLETE")
+            self.assertNotIn("synthetic-inspector-stale", rows)
+            self.assertNotIn("synthetic-defender-unknown-identity", rows)
             self.assertIn("Runtime vulnerability correlation", (dest / "report.md").read_text())
 
 
