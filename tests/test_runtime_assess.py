@@ -170,6 +170,23 @@ class RuntimePolicyTests(unittest.TestCase):
         self.assertEqual(row["base_outcome"], "14D")
         self.assertEqual(row["final_outcome"], "14D")
 
+    def test_3d_non_kev_cannot_be_downgraded_by_low_epss(self):
+        intel = intelligence(pct=.01)
+        intel["epss"][CVE]["probability"] = 0.001
+        intel["cisa"][CVE] = {"status": "FOUND", "automatable": "Y", "technical_impact": "T"}
+        row = run(inspector(), intelligence_data=intel)["observations"][0]
+        self.assertEqual(row["base_outcome"], "3D")
+        self.assertEqual(row["final_outcome"], "3D")
+        self.assertEqual(row["decision_rule"], "URGENT_BASE_GUARD")
+
+    def test_3df_forensic_bod_outcome_is_preserved(self):
+        intel = intelligence(kev=[CVE], pct=.01)
+        intel["cisa"][CVE] = {"status": "FOUND", "automatable": "Y", "technical_impact": "T"}
+        row = run(inspector(), intelligence_data=intel)["observations"][0]
+        self.assertEqual(row["base_outcome"], "3DF")
+        self.assertEqual(row["final_outcome"], "3DF")
+        self.assertEqual(row["decision_rule"], "KEV_GUARD")
+
     def test_epss_absence_uses_neutral_q2(self):
         intel = intelligence()
         intel["epss"][CVE] = {"status": "NOT_FOUND"}

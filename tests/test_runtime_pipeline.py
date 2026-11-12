@@ -48,6 +48,8 @@ class RuntimePipelineTests(unittest.TestCase):
             self.assertEqual(rows["synthetic-inspector-1"]["final_outcome"], "3D")
             self.assertEqual(rows["synthetic-inspector-2"]["platform"], "EKS")
             self.assertEqual(rows["synthetic-inspector-2"]["decision_rule"], "KEV_GUARD")
+            self.assertEqual(rows["synthetic-inspector-2"]["base_outcome"], "3DF")
+            self.assertEqual(rows["synthetic-inspector-2"]["final_outcome"], "3DF")
             self.assertEqual(rows["synthetic-defender-container-1"]["decision_status"],
                              "SUPPRESSED_BY_VEX")
             self.assertNotIn("synthetic-inspector-stale", rows)
