@@ -59,6 +59,7 @@ def observations(inspector: dict | None, defender: list | None) -> list[dict]:
                 "region": None, "image_digest": row.get("image_digest") or details.get("imageDigest"),
                 "repository": details.get("repository"), "registry": details.get("registry"),
                 "asset_type": (details.get("ResourceType") or "UNKNOWN"),
+                "provider_origin": details.get("Source"),
                 "package": row.get("package_name"), "package_version": row.get("package_version"),
                 "package_purl": row.get("package_purl"), "cvss": row.get("cvss") or [],
                 "in_use_count": None,
@@ -69,6 +70,13 @@ def observations(inspector: dict | None, defender: list | None) -> list[dict]:
 def join(observation: dict, workloads: list[dict]) -> tuple[list[dict], str]:
     if observation["source"] == "AWS_INSPECTOR" and observation["asset_type"] != "AWS_ECR_CONTAINER_IMAGE":
         return [], "NON_CONTAINER_ASSET"
+    if observation["source"] == "AZURE_DEFENDER":
+        # A Defender VM/node SoftwareUpdate is NOT a container-image CVE.
+        if str(observation.get("asset_type") or "").lower() not in (
+                "k8s-container", ".containerimage", "container-image"):
+            return [], "NON_CONTAINER_ASSET"
+        if observation.get("provider_origin") not in (None, "Azure", "azure"):
+            return [], "PROVIDER_SCOPE_MISMATCH"
     digest, repo = observation.get("image_digest"), observation.get("repository")
     if not isinstance(digest, str) or not DIGEST.fullmatch(digest) or not repo:
         return [], "IMAGE_IDENTITY_INCOMPLETE"

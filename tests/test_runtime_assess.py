@@ -114,6 +114,18 @@ class RuntimePolicyTests(unittest.TestCase):
         self.assertEqual(row["correlation_status"], "CONFIRMED_RUNNING")
         self.assertEqual(row["final_outcome"], "3D")
 
+    def test_defender_vm_finding_never_attaches_to_image(self):
+        azure = defender()
+        azure[0]["resource_details"]["ResourceType"] = "microsoft.compute/virtualmachines"
+        result = run(defender_data=azure, inventories=[inventory(workload("AKS"))])
+        self.assertEqual(result["observations"][0]["correlation_status"], "NON_CONTAINER_ASSET")
+
+    def test_defender_aws_origin_cannot_attach_to_aks(self):
+        azure = defender()
+        azure[0]["resource_details"]["ResourceType"] = "K8s-container"
+        azure[0]["resource_details"]["Source"] = "AWS"
+        result = run(defender_data=azure, inventories=[inventory(workload("AKS"))])
+        self.assertEqual(result["observations"][0]["correlation_status"], "PROVIDER_SCOPE_MISMATCH")
     def test_defender_missing_digest_remains_unresolved(self):
         x = defender()
         x[0]["resource_details"].pop("imageDigest")
