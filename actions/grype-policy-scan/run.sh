@@ -54,6 +54,7 @@ python3 "$ROOT/scripts/fetch_vulnrichment.py" \
 DECISION=$(python3 "$ROOT/scripts/evaluate.py" \
   --vulnrichment "$REPORT_DIR/vulnrichment.json" \
   --input "$REPORT_DIR/grype.json" \
+  --vex "$VEX" \
   --policy-dir "$ROOT/policy" \
   --image "$INPUT_IMAGE" \
   --exposure "$INPUT_EXPOSURE" \
@@ -75,3 +76,4 @@ if [[ "$INPUT_MODE" == enforce && "$DECISION" != ALLOW ]]; then
   echo "ERROR: release not permitted by policy: $DECISION" >&2
   exit 3
 fi
+
