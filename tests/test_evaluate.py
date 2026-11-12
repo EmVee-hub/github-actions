@@ -79,22 +79,40 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(result["admission"], "REVIEW_REQUIRED")
         self.assertEqual(result["findings"][0]["status"], "INCOMPLETE")
 
+    def test_missing_exposure_defaults_to_public_and_is_auditable(self):
+        data = {"matches": [{"vulnerability": {"id": "CVE-2026-99999", "cvss": []},
+                             "artifact": {"name": "nginx-demo", "version": "1.0"}}]}
+        absent = ev.evaluate(data, "unknown", "cae-live:ci", BASE, AMP, MAPPING)
+        explicit = ev.evaluate(data, "public", "cae-live:ci", BASE, AMP, MAPPING)
+        self.assertEqual(absent["exposure_input"], "unknown")
+        self.assertEqual(absent["publicly_exposed"], "Y")
+        self.assertEqual(absent["exposure_source"], "UNKNOWN_DEFAULT_PUBLIC")
+        self.assertEqual(explicit["exposure_input"], "public")
+        self.assertEqual(explicit["publicly_exposed"], "Y")
+        self.assertEqual(explicit["exposure_source"], "PROJECT_DECLARATION")
+        for report in (absent, explicit):
+            self.assertEqual(report["findings"][0]["publicly_exposed"], "Y")
+            self.assertEqual(report["admission"], "BLOCK")
+        self.assertEqual(absent["counts"], explicit["counts"])
+        self.assertIn("UNKNOWN_DEFAULT_PUBLIC", ev.markdown_report(absent))
+        self.assertIn("PROJECT_DECLARATION", ev.markdown_report(explicit))
+
     def test_bad_report_fails_closed(self):
         with self.assertRaises(ValueError):
             ev.evaluate({}, "unknown", "test", BASE, AMP, MAPPING)
 
-    def test_markdown_report_starts_with_legend(self):
+    def test_markdown_report_contains_scan_only_without_legend(self):
         data = json.loads((ROOT / "tests/fixtures/grype-sample.json").read_text())
         report = ev.evaluate(data, "public", "demo:sha", BASE, AMP, MAPPING)
         md = ev.markdown_report(report)
-        self.assertTrue(md.startswith("# CI Vulnerability Assessment\n\n## 1. Legend"))
-        self.assertLess(md.index("## 1. Legend"), md.index("## 2. Scan results"))
-        self.assertLess(md.index("## 2. Scan results"), md.index("## 3. OpenVEX"))
+        self.assertTrue(md.startswith("# CI Vulnerability Assessment\n\n## Scan results"))
+        self.assertNotIn("## 1. Legend", md)
+        self.assertNotIn("## Decision rule legend", md)
+        self.assertLess(md.index("## Scan results"), md.index("## VEX-suppressed findings"))
+        self.assertLess(md.index("## VEX-suppressed findings"), md.index("## Known MVP limits"))
         for column in ("| KEV |", "| PE |", "| Automatable |", "| TI |", "| EPSS bin |", "| Base |", "| Final |", "| Decision rule |"):
             self.assertIn(column, md)
-        self.assertIn("KEV_GUARD", md)
         self.assertIn("VEX-suppressed", md)
-
 
 
 if __name__ == "__main__":
