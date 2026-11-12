@@ -46,7 +46,7 @@ class CollectorTests(unittest.TestCase):
                 c.collect(None, out, source, coverage)
             manifest = json.loads((out / 'manifest.json').read_text())
             self.assertEqual(manifest['normalized_count'], 0)
-            self.assertEqual(manifest['coverage_count'], 1)
+            self.assertEqual(manifest['coverage_count'], 0)  # no ECR resourceType in this fixture
             self.assertTrue(manifest['coverage_supplied'])
 
     def test_invalid_offline_input_fails_without_fallback(self):
@@ -99,12 +99,33 @@ class CollectorTests(unittest.TestCase):
         rows = c.normalize([f, other])
         self.assertEqual(len({r['observation_id'] for r in rows}), 3)
 
-    def test_host_is_separate_asset(self):
+    def test_host_is_out_of_scope(self):
         f = finding()
         f['resources'] = [{'type': 'AWS_EC2_INSTANCE', 'id': 'i-123', 'region': 'eu-north-1'}]
-        row = c.normalize([f])[0]
-        self.assertEqual(row['runtime']['state'], 'HOST_REQUIRES_INVENTORY')
-        self.assertIsNone(row['asset']['image_digest'])
+        self.assertEqual(c.normalize([f]), [])
+
+    def test_cloud_collector_discards_host_and_other_finding_types(self):
+        ec2 = finding()
+        ec2['resources'] = [{'type': 'AWS_EC2_INSTANCE', 'id': 'i-123', 'region': 'eu-north-1'}]
+        other = finding()
+        other['type'] = 'NETWORK_REACHABILITY'
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'in.json'
+            out = Path(tmp) / 'out'
+            source.write_text(json.dumps({'findings': [finding(), ec2, other]}))
+            c.collect(None, out, source)
+            retained = json.loads((out / 'raw-findings.json').read_text())['findings']
+            self.assertEqual(len(retained), 1)
+            self.assertEqual(retained[0]['type'], 'PACKAGE_VULNERABILITY')
+            self.assertEqual(retained[0]['resources'][0]['type'], c.ECR_TYPE)
+
+    def test_online_uses_ecr_only_filter(self):
+        with patch.object(c, 'aws', return_value={'findings': []}) as api:
+            c.pages('eu-north-1', 'list-findings', 'findings')
+            args = api.call_args.args[3:]
+            self.assertIn('--filter-criteria', args)
+            filter_value = json.loads(args[args.index('--filter-criteria') + 1])
+            self.assertEqual(filter_value, c.ECR_FINDING_FILTER)
 
     def test_failure_manifest_is_incomplete(self):
         with tempfile.TemporaryDirectory() as tmp:

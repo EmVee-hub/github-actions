@@ -8,6 +8,12 @@ from pathlib import Path
 import subprocess
 from datetime import datetime, timezone
 
+# In scope: vulnerabilities in container images that may be deployed to EKS/ECS.
+# A later runtime inventory join is still required to prove they are RUNNING.
+ECR_TYPE = "AWS_ECR_CONTAINER_IMAGE"
+ECR_FINDING_FILTER = {"resourceType": [{"comparison": "EQUALS", "value": ECR_TYPE}],
+                      "findingType": [{"comparison": "EQUALS", "value": "PACKAGE_VULNERABILITY"}]}
+
 
 def aws(region, service, operation, *args):
     result = subprocess.run(
@@ -23,6 +29,8 @@ def pages(region, operation, key):
     rows, seen, token = [], set(), None
     while True:
         args = ['--no-paginate', '--max-results', '100']
+        if operation == 'list-findings':
+            args += ['--filter-criteria', json.dumps(ECR_FINDING_FILTER, separators=(',', ':'))]
         if token:
             args += ['--next-token', token]
         response = aws(region, 'inspector2', operation, *args)
@@ -45,15 +53,13 @@ def normalize(findings):
         vuln = finding.get('packageVulnerabilityDetails', {})
         for resource in finding.get('resources', []):
             kind = resource.get('type')
-            if kind not in ('AWS_ECR_CONTAINER_IMAGE', 'AWS_EC2_INSTANCE'):
-                continue
+            if kind != ECR_TYPE:
+                continue  # EC2/host, Lambda and non-container resources out of scope
             details = resource.get('details', {})
             image = details.get('awsEcrContainerImage', {})
             count = image.get('inUseCount')
             runtime = ('UNKNOWN' if count is None else
                        'REPORTED_IN_USE' if count > 0 else 'NOT_REPORTED_IN_USE')
-            if kind == 'AWS_EC2_INSTANCE':
-                runtime = 'HOST_REQUIRES_INVENTORY'
             for package in vuln.get('vulnerablePackages') or [{}]:
                 identity = [finding.get('awsAccountId'), resource.get('region'),
                             kind, resource.get('id'), image.get('imageHash'),
@@ -132,9 +138,25 @@ def collect(region, output, input_file=None, coverage_file=None):
         # is not project VEX, and provider closure is not verified remediation.
         findings = (load_input(input_file, 'findings') if input_file else
                     pages(region, 'list-findings', 'findings'))
+        # Offline inputs may include unrelated resources; do not persist them
+        # in our container-only evidence or normalized report.
+        findings = [
+            {**finding, 'resources': [
+                resource for resource in (finding.get('resources') or [])
+                if resource.get('type') == ECR_TYPE
+            ]}
+            for finding in findings
+            if finding.get('type') == 'PACKAGE_VULNERABILITY'
+            and any(resource.get('type') == ECR_TYPE
+                    for resource in (finding.get('resources') or []))
+        ]
         write_json(output / 'raw-findings.json', {'findings': findings})
         coverage = ((load_input(coverage_file, 'coveredResources') if coverage_file else [])
                     if input_file else pages(region, 'list-coverage', 'coveredResources'))
+        # Coverage is still provider-side registry coverage, not runtime proof.
+        # Filter host/VM coverage too: the repo manages container images only.
+        coverage = [r for r in coverage
+                    if r.get('resourceType') == ECR_TYPE]
         write_json(output / 'coverage.json', {'coveredResources': coverage})
         rows = normalize(findings)
         for row in rows:
