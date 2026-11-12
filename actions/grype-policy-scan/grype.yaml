@@ -1,0 +1,3 @@
+# Explicit scanner config prevents a project-local .grype.yaml from injecting
+# globally ignored vulnerabilities into this CI control.
+ignore: []

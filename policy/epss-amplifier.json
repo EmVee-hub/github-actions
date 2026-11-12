@@ -1,0 +1,14 @@
+{
+  "id": "LOCAL:EPSS_QUARTILE_AMPLIFIER:0.1.0",
+  "definition": "Custom local policy based on basic:QUARTILES:1.0.0; not an official CISA amplifier",
+  "bins": {"Q1":"q < 0.25", "Q2":"0.25 <= q < 0.50", "Q3":"0.50 <= q < 0.75", "Q4":"0.75 <= q <= 1.0"},
+  "default_when_missing": "Q2",
+  "guards": ["KEV=Y: pass through", "base=3D or 3DF: pass through", "never promote to 3DF"],
+  "table": {
+    "FSU": {"Q1":"FSU", "Q2":"FSU", "Q3":"60D", "Q4":"14D"},
+    "60D": {"Q1":"FSU", "Q2":"60D", "Q3":"14D", "Q4":"3D"},
+    "14D": {"Q1":"60D", "Q2":"14D", "Q3":"3D", "Q4":"3D"},
+    "3D": {"Q1":"3D", "Q2":"3D", "Q3":"3D", "Q4":"3D"},
+    "3DF": {"Q1":"3DF", "Q2":"3DF", "Q3":"3DF", "Q4":"3DF"}
+  }
+}

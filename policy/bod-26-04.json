@@ -1,0 +1,24 @@
+{
+  "id": "cisa:DT_BOD2604:1.0.0",
+  "source": "https://github.com/CERTCC/SSVC/blob/main/data/json/decision_tables/cisa/cisa_bod_26_04_1_0_0.json",
+  "note": "Semantic copy of the 16 decision combinations; NOT an upstream-format JSON document.",
+  "outcome_order": ["FSU", "60D", "14D", "3D", "3DF"],
+  "rows": [
+    {"kev":"N","pe":"N","a":"N","ti":"P","outcome":"FSU"},
+    {"kev":"N","pe":"N","a":"N","ti":"T","outcome":"FSU"},
+    {"kev":"N","pe":"Y","a":"N","ti":"P","outcome":"60D"},
+    {"kev":"N","pe":"N","a":"Y","ti":"P","outcome":"60D"},
+    {"kev":"N","pe":"N","a":"Y","ti":"T","outcome":"60D"},
+    {"kev":"N","pe":"Y","a":"Y","ti":"P","outcome":"14D"},
+    {"kev":"N","pe":"Y","a":"N","ti":"T","outcome":"14D"},
+    {"kev":"N","pe":"Y","a":"Y","ti":"T","outcome":"3D"},
+    {"kev":"Y","pe":"N","a":"N","ti":"P","outcome":"14D"},
+    {"kev":"Y","pe":"Y","a":"N","ti":"P","outcome":"14D"},
+    {"kev":"Y","pe":"N","a":"Y","ti":"P","outcome":"14D"},
+    {"kev":"Y","pe":"N","a":"N","ti":"T","outcome":"14D"},
+    {"kev":"Y","pe":"Y","a":"Y","ti":"P","outcome":"3D"},
+    {"kev":"Y","pe":"Y","a":"N","ti":"T","outcome":"3DF"},
+    {"kev":"Y","pe":"N","a":"Y","ti":"T","outcome":"3DF"},
+    {"kev":"Y","pe":"Y","a":"Y","ti":"T","outcome":"3DF"}
+  ]
+}
