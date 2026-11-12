@@ -44,28 +44,5 @@
       "Q3": "3DF",
       "Q4": "3DF"
     }
-  },
-  "probability_policy": {
-    "id": "LOCAL:EPSS_PROBABILITY_5_10:1.0.0",
-    "kev": {
-      "default": "3D",
-      "preserve": [
-        "3DF"
-      ]
-    },
-    "non_kev": {
-      "default": "FSU",
-      "missing": "FSU",
-      "thresholds": [
-        {
-          "minimum_probability": 0.1,
-          "outcome": "30D"
-        },
-        {
-          "minimum_probability": 0.05,
-          "outcome": "60D"
-        }
-      ]
-    }
   }
 }

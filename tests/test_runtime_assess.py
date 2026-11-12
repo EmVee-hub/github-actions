@@ -89,14 +89,14 @@ def run(inspector_data=None, defender_data=None, inventories=None, intelligence_
 
 
 class RuntimePolicyTests(unittest.TestCase):
-    def test_eks_inspector_exact_running_image_epss_probability_target(self):
+    def test_eks_inspector_exact_running_image_bod_epss_amplifier(self):
         r = run(inspector())
         row = r["observations"][0]
         self.assertEqual(row["correlation_status"], "CONFIRMED_RUNNING")
         self.assertEqual(row["platform"], "EKS")
         self.assertEqual(row["base_outcome"], "60D")
-        self.assertEqual(row["final_outcome"], "30D")
-        self.assertEqual(row["decision_rule"], "POC_EPSS_PROBABILITY")
+        self.assertEqual(row["final_outcome"], "3D")
+        self.assertEqual(row["decision_rule"], "AMPLIFIED")
         self.assertEqual(row["decision_status"], "EVALUATED")
         self.assertEqual(row["epss_percentile"], .99)
         self.assertEqual(row["publicly_exposed"], "Y")
@@ -112,7 +112,7 @@ class RuntimePolicyTests(unittest.TestCase):
         row = run(defender_data=defender(), inventories=[inventory(workload("AKS"))])["observations"][0]
         self.assertEqual(row["source"], "AZURE_DEFENDER")
         self.assertEqual(row["correlation_status"], "CONFIRMED_RUNNING")
-        self.assertEqual(row["final_outcome"], "30D")
+        self.assertEqual(row["final_outcome"], "3D")
 
     def test_defender_vm_finding_never_attaches_to_image(self):
         azure = defender()
@@ -166,17 +166,34 @@ class RuntimePolicyTests(unittest.TestCase):
     def test_kev_guard_same_as_ci_evaluator(self):
         result = run(inspector(), intelligence_data=intelligence(kev=[CVE]))
         row = result["observations"][0]
-        self.assertEqual(row["decision_rule"], "POC_KEV_URGENT")
+        self.assertEqual(row["decision_rule"], "KEV_GUARD")
         self.assertEqual(row["base_outcome"], "14D")
-        self.assertEqual(row["final_outcome"], "3D")
+        self.assertEqual(row["final_outcome"], "14D")
 
-    def test_epss_absence_uses_fsu(self):
+    def test_3d_non_kev_cannot_be_downgraded_by_low_epss(self):
+        intel = intelligence(pct=.01)
+        intel["epss"][CVE]["probability"] = 0.001
+        intel["cisa"][CVE] = {"status": "FOUND", "automatable": "Y", "technical_impact": "T"}
+        row = run(inspector(), intelligence_data=intel)["observations"][0]
+        self.assertEqual(row["base_outcome"], "3D")
+        self.assertEqual(row["final_outcome"], "3D")
+        self.assertEqual(row["decision_rule"], "URGENT_BASE_GUARD")
+
+    def test_3df_forensic_bod_outcome_is_preserved(self):
+        intel = intelligence(kev=[CVE], pct=.01)
+        intel["cisa"][CVE] = {"status": "FOUND", "automatable": "Y", "technical_impact": "T"}
+        row = run(inspector(), intelligence_data=intel)["observations"][0]
+        self.assertEqual(row["base_outcome"], "3DF")
+        self.assertEqual(row["final_outcome"], "3DF")
+        self.assertEqual(row["decision_rule"], "KEV_GUARD")
+
+    def test_epss_absence_uses_neutral_q2(self):
         intel = intelligence()
         intel["epss"][CVE] = {"status": "NOT_FOUND"}
         row = run(inspector(), intelligence_data=intel)["observations"][0]
         self.assertEqual(row["epss_bin"], "Q2")
-        self.assertEqual(row["final_outcome"], "FSU")
-        self.assertEqual(row["decision_rule"], "POC_EPSS_PROBABILITY")
+        self.assertEqual(row["final_outcome"], "60D")
+        self.assertEqual(row["decision_rule"], "EPSS_UNAVAILABLE_NEUTRAL")
 
     def test_network_failure_requires_review(self):
         intel = intelligence()
@@ -205,7 +222,7 @@ class RuntimePolicyTests(unittest.TestCase):
         row = run(inspector(purl=None), vex={PROJECT: vex_doc()})["observations"][0]
         self.assertEqual(row["decision_status"], "REVIEW_REQUIRED")
         self.assertIn("PACKAGE_PURL_UNKNOWN", row["reasons"])
-        self.assertEqual(row["final_outcome"], "30D")  # preliminary priority retained
+        self.assertEqual(row["final_outcome"], "3D")  # preliminary priority retained
 
     def test_unknown_project_needs_review(self):
         row = run(inspector(), inventories=[inventory(workload(project=None))])["observations"][0]
