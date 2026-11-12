@@ -70,23 +70,9 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual({w["container_role"] for w in records["workloads"]}, {"app", "ephemeral"})
         self.assertTrue(all(w["pod_terminating"] for w in records["workloads"]))
 
-    def test_ecs_image_digest(self):
-        payload = {"tasks": [
-            {"taskArn": "t1", "group": "service:payments", "lastStatus": "RUNNING",
-             "desiredStatus": "RUNNING",
-             "tags": [{"key": inv.LABEL_PROJECT, "value": "payments"}],
-             "containers": [{"name": "app", "lastStatus": "RUNNING",
-                             "image": IMG, "imageDigest": D}]}
-        ]}
-        data = inv.parse_ecs(payload, "payments", ACCOUNT, "eu-north-1")
-        self.assertEqual(data["workloads"][0]["image_digest"], D)
-        self.assertEqual(data["workloads"][0]["platform"], "ECS")
-
-    def test_ecs_wrong_task_status_excluded(self):
-        payload = {"tasks": [{"lastStatus": "STOPPED", "desiredStatus": "STOPPED",
-                             "containers": [{"image": IMG, "imageDigest": D,
-                                             "lastStatus": "RUNNING"}]}]}
-        self.assertFalse(inv.parse_ecs(payload, "c", ACCOUNT, "eu-north-1")["workloads"])
+    def test_reject_non_kubernetes_platform(self):
+        with self.assertRaisesRegex(ValueError, "AKS or EKS"):
+            inv.parse_pods(POD, "unsupported", "cluster", ACCOUNT)
 
     def test_missing_registry_unresolved(self):
         payload = __import__("copy").deepcopy(POD)

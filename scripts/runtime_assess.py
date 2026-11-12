@@ -90,7 +90,7 @@ def join(observation: dict, workloads: list[dict]) -> tuple[list[dict], str]:
         if w.get("state") != "RUNNING" or w.get("image_digest") != digest or w.get("repository") != repo:
             continue
         if observation["source"] == "AWS_INSPECTOR":
-            if w.get("platform") not in ("EKS", "ECS"):
+            if w.get("platform") != "EKS":
                 continue
             account, region = observation.get("account_id"), observation.get("region")
             if not account or not region or w.get("account_id") != account or w.get("region") != region:
@@ -232,6 +232,12 @@ def assess(inspector: dict | None, defender: list | None, inventories: list[dict
     for inventory in inventories:
         if inventory.get("collection_complete") is not True or not isinstance(inventory.get("workloads"), list):
             raise ValueError("Incomplete runtime inventory; do not use partial data")
+        # Only AKS/EKS Pod observations are trusted. Reject legacy/non-Pod data
+        # rather than silently correlating it to a Kubernetes workload.
+        if any(w.get("platform") not in ("AKS", "EKS")
+               or not w.get("namespace") or not w.get("workload_uid")
+               for w in inventory["workloads"]):
+            raise ValueError("Only AKS/EKS Pod runtime inventories are supported")
         workloads.extend(inventory["workloads"])
         unresolved.extend(inventory.get("unresolved") or [])
     if intel.get("complete") is not True:
@@ -273,7 +279,7 @@ def assess(inspector: dict | None, defender: list | None, inventories: list[dict
 def markdown_report(report: dict) -> str:
     lines = [
         "# Running container vulnerability assessment — BOD/EPSS", "",
-        "**Only CVEs tied to RUNNING Pod/ECS containers are listed.**", "",
+        "**Only CVEs tied to running AKS/EKS Pod containers are listed.**", "",
         "**No runtime actions taken. Evidence/correlation does not prove complete coverage.**", "",
         "| Provider | Workload | CVE | Severity | Correlation | VEX | KEV | PE | EPSS bin | Base | Final | Status / reason |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|",

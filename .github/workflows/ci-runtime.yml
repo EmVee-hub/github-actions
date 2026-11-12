@@ -33,7 +33,7 @@ permissions:
 
 jobs:
   offline-runtime-policy:
-    name: Offline AKS/EKS/ECS correlation + BOD/EPSS tests
+    name: Offline AKS/EKS Pod correlation + BOD/EPSS tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

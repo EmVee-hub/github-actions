@@ -8,14 +8,14 @@ on:
     inputs:
       platform:
         type: choice
-        options: [ecs, eks, aks]
+        options: [eks, aks]
         required: true
       cluster:
         type: string
         required: true
       region:
         type: string
-        description: AWS Region (ECS/EKS)
+        description: AWS Region (EKS)
         required: false
       subscription_id:
         type: string
@@ -62,7 +62,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: EmVee-hub/github-actions
-          ref: 1a4180a4f9d408e2c9420103567baa18b07e9a31
+          ref: 97f5e4db0967e9c38621ed08ad3ba11f2a8679bb
           path: security-toolkit
           persist-credentials: false
 
@@ -89,7 +89,7 @@ jobs:
           echo "KUBECONFIG=$RUNNER_TEMP/runtime-pilot/kubeconfig" >> "$GITHUB_ENV"
 
       - name: Authenticate AWS with read-only OIDC
-        if: ${{ inputs.platform == 'ecs' || inputs.platform == 'eks' }}
+        if: ${{ inputs.platform == 'eks' }}
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd
         with:
           role-to-assume: ${{ vars.AWS_RUNTIME_ROLE_ARN }}
@@ -108,23 +108,17 @@ jobs:
           subscription-id: ${{ inputs.subscription_id }}
 
       - name: Collect AWS Inspector evidence and AWS runtime inventory
-        if: ${{ inputs.platform == 'ecs' || inputs.platform == 'eks' }}
+        if: ${{ inputs.platform == 'eks' }}
         shell: bash
         run: |
           set -euo pipefail
           python3 security-toolkit/scripts/collect_inspector.py \
             --region "$AWS_REGION" --output "$OUTPUT/inspector"
-          if [[ "$INPUT_PLATFORM" == ecs ]]; then
-            python3 security-toolkit/scripts/runtime_workloads.py --platform ECS \
-              --cluster "$INPUT_CLUSTER" --account-id "$AWS_ACCOUNT_ID" \
-              --region "$AWS_REGION" --output "$OUTPUT/workloads.json"
-          else
-            aws eks update-kubeconfig --region "$AWS_REGION" --name "$INPUT_CLUSTER" \
-              --kubeconfig "$KUBECONFIG"
-            python3 security-toolkit/scripts/runtime_workloads.py --platform EKS \
-              --cluster "$INPUT_CLUSTER" --account-id "$AWS_ACCOUNT_ID" \
-              --region "$AWS_REGION" --output "$OUTPUT/workloads.json"
-          fi
+          aws eks update-kubeconfig --region "$AWS_REGION" --name "$INPUT_CLUSTER" \
+            --kubeconfig "$KUBECONFIG"
+          python3 security-toolkit/scripts/runtime_workloads.py --platform EKS \
+            --cluster "$INPUT_CLUSTER" --account-id "$AWS_ACCOUNT_ID" \
+            --region "$AWS_REGION" --output "$OUTPUT/workloads.json"
 
       - name: Collect Defender evidence and AKS runtime inventory
         if: ${{ inputs.platform == 'aks' }}

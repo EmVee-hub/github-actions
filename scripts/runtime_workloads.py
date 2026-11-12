@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only runtime inventory for AKS/EKS pods and ECS running tasks.
+"""Read-only runtime inventory of running AKS/EKS Pod containers.
 
 This is a *point-in-time workload observation*, not complete scan coverage.
 Only registry MANIFEST digests are eligible for vulnerability joins.
@@ -104,98 +104,31 @@ def parse_pods(payload: dict, platform: str, cluster: str, scope: str,
     return {"workloads": workloads, "unresolved": unresolved}
 
 
-def parse_ecs(payload: dict, cluster: str, account: str, region: str) -> dict:
-    tasks = payload.get("tasks")
-    if not isinstance(tasks, list):
-        raise ValueError("Expected AWS ECS DescribeTasks response with tasks array")
-    workloads, unresolved = [], []
-    for task in tasks:
-        if task.get("lastStatus") != "RUNNING" or task.get("desiredStatus") != "RUNNING":
-            continue
-        task_labels = {"labels": {k: v for t in (task.get("tags") or [])
-                                  if (k := t.get("key")) and (v := t.get("value"))}}
-        # Direct ECS task tags use the same explicit names as Kubernetes Pod labels.
-        tags = labels(task_labels)
-        for c in task.get("containers") or []:
-            if c.get("lastStatus") != "RUNNING":
-                continue
-            image = c.get("image") or ""
-            registry, repository = locator(image)
-            digest = c.get("imageDigest")
-            digest = digest if isinstance(digest, str) and DIGEST.fullmatch(digest) else None
-            entry = {
-                "platform": "ECS", "cluster": cluster, "account_id": account,
-                "subscription_id": None, "region": region, "namespace": None,
-                "workload": task.get("group") or task.get("taskDefinitionArn"),
-                "container": c.get("name"), "workload_uid": task.get("taskArn"),
-                "image": image, "image_id": None, "image_digest": digest,
-                "registry": registry, "repository": repository,
-                "architecture": None, "state": "RUNNING", **tags,
-            }
-            if digest and registry and repository:
-                workloads.append(entry)
-            else:
-                unresolved.append({**entry, "reason": "IMAGE_MANIFEST_DIGEST_OR_REGISTRY_UNKNOWN"})
-    return {"workloads": workloads, "unresolved": unresolved}
-
 
 def command(*argv: str) -> dict:
     result = subprocess.run(argv, capture_output=True, text=True, check=True, timeout=180)
     return json.loads(result.stdout)
 
 
-def collect_ecs(cluster: str, region: str, account: str) -> dict:
-    caller = command("aws", "sts", "get-caller-identity", "--region", region, "--output", "json")
-    if caller.get("Account") != account:
-        raise ValueError("AWS identity does not match configured account")
-    token, seen, arns, tasks = None, set(), [], []
-    while True:
-        cmd = ["aws", "ecs", "list-tasks", "--region", region, "--cluster", cluster,
-               "--desired-status", "RUNNING", "--no-paginate", "--output", "json"]
-        if token:
-            cmd += ["--starting-token", token]
-        page = command(*cmd)
-        if not isinstance(page.get("taskArns"), list):
-            raise ValueError("Missing ECS taskArns")
-        arns.extend(page["taskArns"])
-        token = page.get("nextToken")
-        if not token:
-            break
-        if token in seen:
-            raise ValueError("Repeated ECS continuation token")
-        seen.add(token)
-    for i in range(0, len(arns), 100):
-        page = command("aws", "ecs", "describe-tasks", "--region", region, "--cluster", cluster,
-                       "--tasks", *arns[i:i+100], "--include", "TAGS", "--output", "json")
-        if page.get("failures"):
-            raise ValueError("ECS describe-tasks returned failures")
-        tasks.extend(page.get("tasks") or [])
-    if len(tasks) != len(arns):
-        raise ValueError("ECS tasks missing from description; inventory incomplete")
-    return {"tasks": tasks}
-
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--platform", required=True, choices=["AKS", "EKS", "ECS"])
+    p.add_argument("--platform", required=True, choices=["AKS", "EKS"])
     p.add_argument("--cluster", required=True)
-    p.add_argument("--account-id", help="Required for EKS/ECS")
+    p.add_argument("--account-id", help="Required for EKS")
     p.add_argument("--subscription-id", help="Required for AKS")
     p.add_argument("--region", help="Required for AWS")
-    p.add_argument("--input", type=Path, help="Offline kubectl pods JSON / ECS describe-tasks JSON")
+    p.add_argument("--input", type=Path, help="Offline kubectl pods JSON")
     p.add_argument("--output", type=Path, required=True)
     a = p.parse_args()
     if a.platform == "AKS" and not a.subscription_id:
         p.error("--subscription-id required for AKS")
-    if a.platform in ("EKS", "ECS") and (not a.account_id or not a.region):
-        p.error("--account-id and --region required for EKS/ECS")
+    if a.platform == "EKS" and (not a.account_id or not a.region):
+        p.error("--account-id and --region required for EKS")
     scope = a.subscription_id if a.platform == "AKS" else a.account_id
-    payload = json.loads(a.input.read_text()) if a.input else (
-        collect_ecs(a.cluster, a.region, a.account_id) if a.platform == "ECS"
-        else command("kubectl", "get", "pods", "--all-namespaces", "-o", "json"))
-    observation = (parse_ecs(payload, a.cluster, a.account_id, a.region)
-                   if a.platform == "ECS"
-                   else parse_pods(payload, a.platform, a.cluster, scope, a.region))
+    payload = (json.loads(a.input.read_text()) if a.input
+               else command("kubectl", "get", "pods", "--all-namespaces", "-o", "json"))
+    observation = parse_pods(payload, a.platform, a.cluster, scope, a.region)
     result = {
         "schema_version": "runtime-inventory/1.0", "mode": "OFFLINE" if a.input else "LIVE",
         "observed_at": datetime.now(timezone.utc).isoformat(),

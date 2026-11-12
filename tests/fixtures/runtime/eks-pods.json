@@ -35,6 +35,41 @@
           }
         ]
       }
+    },
+    {
+      "metadata": {
+        "name": "billing-abc",
+        "namespace": "prod",
+        "uid": "uid-billing-abc",
+        "labels": {
+          "security.example.com/project": "billing",
+          "security.example.com/exposure": "public",
+          "security.example.com/prod-critical": "true"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "app",
+            "image": "123456789012.dkr.ecr.eu-north-1.amazonaws.com/billing/api:v3"
+          }
+        ]
+      },
+      "status": {
+        "phase": "Running",
+        "containerStatuses": [
+          {
+            "name": "app",
+            "image": "123456789012.dkr.ecr.eu-north-1.amazonaws.com/billing/api:v3",
+            "imageID": "docker-pullable://123456789012.dkr.ecr.eu-north-1.amazonaws.com/billing/api@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "state": {
+              "running": {
+                "startedAt": "2026-11-12T00:00:00Z"
+              }
+            }
+          }
+        ]
+      }
     }
   ]
 }

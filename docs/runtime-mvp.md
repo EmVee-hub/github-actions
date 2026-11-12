@@ -1,12 +1,12 @@
 # Runtime cloud findings → BOD/EPSS — integration pilot
 
 **Status:** an implemented, testable correlation-and-policy slice. The synthetic
-AKS/EKS/ECS integration passed CI, but **real customer-cloud runtime coverage has
+AKS/EKS integration passed CI, but **real customer-cloud runtime coverage has
 not yet been validated**. This is an MVP candidate rather than production sign-off.
 
 ## Container-only scope
 
-**Only running containers count: AKS/EKS Pods and ECS task containers.**
+**Only running AKS/EKS Pod containers count.**
 EC2 hosts, VM/node OS, Lambda, unrelated services and non-running ECR/ACR
 images are outside the runtime security program. Registry image vulnerability
 data is only source evidence after an exact match to a running container.
@@ -17,7 +17,7 @@ but an exclusion count is retained to avoid treating missing evidence as safe.
 
 1. The existing Azure Defender and AWS Inspector collectors preserve raw
    provider findings and provisional normalized vulnerability observations.
-2. A read-only Kubernetes Pod or ECS task snapshot identifies *RUNNING*
+2. A read-only Kubernetes Pod snapshot identifies *RUNNING*
    containers and their immutable **manifest digests**.
 3. The new runtime assessor correlates those identities by digest,
    registry/repository, and account/Region or Azure subscription. An image
@@ -45,7 +45,7 @@ Neither a zero-result scan nor a missing runtime correlation proves safety.
 No containers are stopped or modified. There is no production gate, due-date
 ledger, 95% disposition KPI, or auto-enforcement yet.
 
-## Run the synthetic three-platform integration
+## Run the synthetic AKS/EKS Pod integration
 
 From the central github-actions repository root:
 
@@ -55,9 +55,6 @@ mkdir -p /tmp/runtime-demo
 python3 scripts/runtime_workloads.py --platform EKS --cluster eks-demo \
   --account-id 123456789012 --region eu-north-1 \
   --input "$FIX/eks-pods.json" --output /tmp/runtime-demo/eks.json
-python3 scripts/runtime_workloads.py --platform ECS --cluster ecs-demo \
-  --account-id 123456789012 --region eu-north-1 \
-  --input "$FIX/ecs-tasks.json" --output /tmp/runtime-demo/ecs.json
 python3 scripts/runtime_workloads.py --platform AKS --cluster aks-demo \
   --subscription-id 11111111-1111-1111-1111-111111111111 \
   --input "$FIX/aks-pods.json" --output /tmp/runtime-demo/aks.json
@@ -65,20 +62,20 @@ python3 scripts/runtime_workloads.py --platform AKS --cluster aks-demo \
 python3 scripts/runtime_assess.py \
   --inspector "$FIX/inspector-normalized.json" \
   --defender "$FIX/defender-observations.json" \
-  --inventory /tmp/runtime-demo/{eks,ecs,aks}.json \
+  --inventory /tmp/runtime-demo/{eks,aks}.json \
   --cves-only /tmp/runtime-demo/cves.json
 
 # Fixture intelligence is deliberately SYNTHETIC, not the current live feed.
 python3 scripts/runtime_assess.py \
   --inspector "$FIX/inspector-normalized.json" \
   --defender "$FIX/defender-observations.json" \
-  --inventory /tmp/runtime-demo/{eks,ecs,aks}.json \
+  --inventory /tmp/runtime-demo/{eks,aks}.json \
   --intel "$FIX/intelligence.json" --vex-map "$FIX/vex-map.json" \
   --output /tmp/runtime-demo/assessment.json \
   --markdown /tmp/runtime-demo/assessment.md
 ~~~
 
-Expected: 2 EKS/ECS evaluated runtime findings and 1 synthetic AKS VEX
+Expected: 2 EKS Pod findings evaluated and 1 synthetic AKS VEX
 suppression. An unmatched ECR image and a Defender record with missing digest
 are counted as **excluded** rather than shown as running-container CVEs.
 The GitHub workflow runtime-demo.yml runs the same integration.
@@ -101,59 +98,42 @@ workloads explicitly labeled project=service-blueprint can use that VEX.
 Review and update the pinned central toolkit SHA and project SHA when merging.
 It does not create cloud resources or automatically change production workloads.
 
-## Real AWS ECS pilot — run in a PRIVATE execution environment
+## Real AWS EKS pilot — use a private read-only execution environment
 
-**Do not upload real cloud inventory, package lists or security findings to
-these public source repositories.** Use a private GitHub Actions execution repo
-or an approved isolated runner with OIDC and restricted artifact access.
+**Do not upload live workload inventory, vulnerability findings or credentials
+to these public source repositories.** Use a private execution repository with
+an approved isolated runner and read-only federated cloud identity.
 
-Permissions for the authorised AWS account/Region: Inspector2 ListFindings
-and ListCoverage; ECS ListTasks, DescribeTasks, and task tag read where
-necessary; STS GetCallerIdentity. Configure one read-only authenticated role,
-the ECS cluster name and Region. Inspector enhanced ECR scanning must be
-enabled for the target image.
+Authorize Inspector2 ListFindings/ListCoverage, EKS DescribeCluster and
+STS GetCallerIdentity, plus Kubernetes RBAC to list Pods. Inspector ECR
+scanning provides CVEs only for images matched to running EKS Pods.
 
 ~~~bash
 export AWS_ACCOUNT_ID=YOUR_12_DIGIT_ACCOUNT
 export AWS_REGION=eu-north-1
-export ECS_CLUSTER=YOUR_ECS_CLUSTER
-
+export EKS_CLUSTER=YOUR_EKS_CLUSTER
 python3 scripts/collect_inspector.py --region "$AWS_REGION" \
   --output /tmp/live-inspector
-python3 scripts/runtime_workloads.py --platform ECS --cluster "$ECS_CLUSTER" \
+aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER"
+python3 scripts/runtime_workloads.py --platform EKS --cluster "$EKS_CLUSTER" \
   --account-id "$AWS_ACCOUNT_ID" --region "$AWS_REGION" \
-  --output /tmp/live-ecs.json
-
-# The inventory-scoped CVE selection excludes unmatched registry-only images.
+  --output /tmp/live-eks.json
 python3 scripts/runtime_assess.py \
   --inspector /tmp/live-inspector/normalized-findings.json \
-  --inventory /tmp/live-ecs.json --cves-only /tmp/live-cves.json
+  --inventory /tmp/live-eks.json --cves-only /tmp/live-cves.json
 python3 scripts/fetch_runtime_intel.py \
   --cves /tmp/live-cves.json --output /tmp/live-intelligence.json
-
-# Operator-approved JSON map, project label -> project repo OpenVEX path.
 python3 scripts/runtime_assess.py \
   --inspector /tmp/live-inspector/normalized-findings.json \
-  --inventory /tmp/live-ecs.json --intel /tmp/live-intelligence.json \
+  --inventory /tmp/live-eks.json --intel /tmp/live-intelligence.json \
   --vex-map /private/config/project-vex-map.json \
   --output /tmp/live-decisions.json --markdown /tmp/live-report.md
 ~~~
 
-The metadata keys used for inventory ownership and policy are MVP-specific
-conventions: security.example.com/project, security.example.com/exposure, and
-security.example.com/prod-critical. They must be set and reviewed in the
-workload deployment process; the collector **does not infer** public exposure
-or production criticality from cluster topology.
-
-For EKS, use an authorised AWS role with EKS DescribeCluster and Kubernetes
-cluster authorization to list Pods across the intended namespaces:
-
-~~~bash
-aws eks update-kubeconfig --region "$AWS_REGION" --name YOUR_EKS_CLUSTER
-python3 scripts/runtime_workloads.py --platform EKS --cluster YOUR_EKS_CLUSTER \
-  --account-id "$AWS_ACCOUNT_ID" --region "$AWS_REGION" \
-  --output /tmp/live-eks.json
-~~~
+For Pod metadata, the MVP reads these explicit, organization-defined labels:
+`security.example.com/project`, `security.example.com/exposure`, and
+`security.example.com/prod-critical`. The exporter does not infer actual
+Internet exposure or business criticality from cluster networking.
 
 For AKS, the Azure identity needs read access to Defender/Resource Graph,
 AKS credential access and Kubernetes RBAC allowing listing the intended Pods:
@@ -180,7 +160,7 @@ claiming production AKS correlation. Do not infer a digest from a CVE or tag.
   exporter will not treat them as registry manifest digests unless an
   authoritative image reference includes @sha256. Unknown is recorded.
 - AWS ECR image findings require matching account, Region, repository, and
-  immutable digest to an observed RUNNING EKS/ECS container. The Inspector
+  immutable digest to an observed RUNNING EKS Pod container. The Inspector
   inUseCount field is NOT a workload identifier.
 - Azure joins additionally require a matching subscription, registry,
   repository and digest. Missing identity is visible; provider CLOSED or
@@ -199,14 +179,13 @@ claiming production AKS correlation. Do not infer a digest from a CVE or tag.
 - No durable first/last-seen ledger, remediation owner tracking, 3DF incident
   workflow, or 95% prod-critical disposition accounting exists yet.
 
-**MVP acceptance should require:** a real private ECS pilot where ECR
-digest matches are verified against running tasks; a second EKS/AKS pilot;
-source coverage and freshness checks; validated Defender image identity;
-operator-approved VEX; and a persistent triage/disposition store.
+**MVP acceptance should require:** a private EKS pilot matching Inspector
+image digests to running Pods, a separate AKS pilot, coverage and freshness
+validation, verified Defender image identity, approved project VEX and a
+persistent triage/disposition store.
 
 ## References
 
-- AWS ECS DescribeTasks: https://docs.aws.amazon.com/cli/latest/reference/ecs/describe-tasks.html
 - AWS Inspector ECR: https://docs.aws.amazon.com/inspector/latest/user/scanning-ecr.html
 - Defender containers: https://learn.microsoft.com/en-us/azure/defender-for-cloud/defender-for-containers-usage
 - FIRST EPSS API: https://api.first.org/epss/
