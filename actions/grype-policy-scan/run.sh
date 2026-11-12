@@ -10,13 +10,6 @@ ROOT="$(cd "${GITHUB_ACTION_PATH}/../.." && pwd)"
 : "${INPUT_MODE:=shadow}"
 : "${INPUT_EXPOSURE:=unknown}"
 
-policy_args=()
-case "${INPUT_POC_KEV_EPSS:-false}" in
-  true) policy_args+=(--poc-kev-epss) ;;
-  false) policy_args+=(--no-poc-kev-epss) ;;
-  *) echo "ERROR: poc-kev-epss must be true or false" >&2; exit 2 ;;
-esac
-
 if [[ "$INPUT_MODE" != shadow && "$INPUT_MODE" != enforce ]]; then
   echo "ERROR: mode must be shadow or enforce" >&2; exit 2
 fi
@@ -58,7 +51,7 @@ python3 "$ROOT/scripts/fetch_vulnrichment.py" \
   --input "$REPORT_DIR/grype.json" \
   --output "$REPORT_DIR/vulnrichment.json"
 
-DECISION=$(python3 "$ROOT/scripts/evaluate.py" "${policy_args[@]}" \
+DECISION=$(python3 "$ROOT/scripts/evaluate.py" \
   --vulnrichment "$REPORT_DIR/vulnrichment.json" \
   --input "$REPORT_DIR/grype.json" \
   --vex "$VEX" \

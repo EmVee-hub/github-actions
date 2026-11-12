@@ -31,23 +31,14 @@ def load_policy(policy_dir: Path) -> tuple[dict, dict, dict]:
     for per_bin in amp["table"].values():
         if set(per_bin) != {"Q1", "Q2", "Q3", "Q4"}:
             raise ValueError("Each amplifier row must cover Q1..Q4")
-    policy = amp["probability_policy"]
-    if not policy.get("id"):
-        raise ValueError("Probability policy needs an id")
-    if policy["kev"]["default"] not in ("3D", "3DF") or policy["kev"]["preserve"] != ["3DF"]:
-        raise ValueError("KEV policy must remain urgent and preserve 3DF")
-    rules = policy["non_kev"]
-    allowed = {"FSU", "60D", "30D"}
-    if rules["default"] not in allowed or rules["missing"] not in allowed:
-        raise ValueError("Invalid non-KEV fallback")
-    previous = 2
-    for threshold in rules["thresholds"]:
-        value = threshold["minimum_probability"]
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1 or value >= previous:
-            raise ValueError("EPSS thresholds must be unique, descending probabilities")
-        if threshold["outcome"] not in allowed:
-            raise ValueError("Invalid non-KEV outcome")
-        previous = value
+    # Fail closed on invalid policy configuration; the BOD table is authoritative.
+    allowed_outcomes = set(base["outcome_order"])
+    for base_outcome, per_bin in amp["table"].items():
+        for bin_name, value in per_bin.items():
+            if value not in allowed_outcomes:
+                raise ValueError(f"Invalid EPSS outcome {base_outcome}/{bin_name}: {value}")
+            if value == "3DF" and base_outcome != "3DF":
+                raise ValueError("EPSS cannot create a forensic 3DF disposition")
     return base, amp, mapping
 
 
@@ -190,35 +181,6 @@ def make_decision(match: dict, exposure: str, mapping: dict, amp: dict,
     return row
 
 
-def poc_priority(base: str, kev: str, probability: float | str | None,
-                 amp: dict) -> tuple[str, str]:
-    policy = amp["probability_policy"]
-    if kev == "Y":
-        target = base if base in policy["kev"]["preserve"] else policy["kev"]["default"]
-        return target, "POC_KEV_URGENT"
-    rules = policy["non_kev"]
-    if probability is None:
-        return rules["missing"], "POC_EPSS_PROBABILITY"
-    score = float(probability)
-    if not 0 <= score <= 1:
-        raise ValueError(f"Invalid EPSS probability: {score}")
-    for threshold in rules["thresholds"]:
-        if score >= threshold["minimum_probability"]:
-            return threshold["outcome"], "POC_EPSS_PROBABILITY"
-    return rules["default"], "POC_EPSS_PROBABILITY"
-
-
-def apply_poc_policy(row: dict, amp: dict) -> None:
-    """Apply the local KEV/EPSS targets while preserving the BOD result."""
-    row["quartile_outcome"] = row["final_outcome"]
-    if row["status"] == "INCOMPLETE":
-        row.update(admission="REVIEW_REQUIRED", admission_reason=row["rule"])
-        return
-    target, rule = poc_priority(row["base_outcome"], row["kev"], row["epss_probability"], amp)
-    row.update(final_outcome=target, rule=rule,
-               admission="BLOCK" if row["kev"] == "Y" else "ALLOW",
-               admission_reason=rule if row["kev"] == "Y" else "POC_NON_KEV_SCHEDULED")
-
 
 def suppression_reason(match: dict, vex: dict | None, image: str) -> str:
     """Annotate Grype-ignored records only; never decide applicability here.
@@ -257,15 +219,12 @@ def suppression_reason(match: dict, vex: dict | None, image: str) -> str:
 
 def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
              mapping: dict, enrichment: dict | None = None, vex: dict | None = None,
-             *, poc_kev_epss: bool = False) -> dict:
+) -> dict:
     if not isinstance(data, dict) or not isinstance(data.get("matches"), list):
         raise ValueError("Invalid Grype report: expected 'matches' array")
     if exposure not in ("public", "internal", "unknown"):
         raise ValueError(f"Invalid exposure: {exposure}")
     findings = [make_decision(m, exposure, mapping, amp, enrichment) for m in data["matches"]]
-    for finding in findings:
-        if poc_kev_epss:
-            apply_poc_policy(finding, amp)
     ignored = []
     for match in (data.get("ignoredMatches") or []):
         v = match.get("vulnerability") or {}
@@ -289,11 +248,10 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
                             else "UNKNOWN_DEFAULT_PUBLIC"),
         "assessed_at": datetime.now(timezone.utc).isoformat(),
         "model": base["id"],
-        "amplifier": amp["probability_policy"]["id"] if poc_kev_epss else amp["id"],
+        "amplifier": amp["id"],
         "admission": decision,
-        "probability_policy": amp["probability_policy"] if poc_kev_epss else None,
-        "admission_policy": ("LOCAL:POC_KEV_EPSS:1.0.0" if poc_kev_epss
-                             else "LOCAL:QUARTILE_CI:1.0.0"),
+        "amplifier_table": amp["table"],
+        "admission_policy": "LOCAL:BOD2604_EPSS_QUARTILE_CI:1.0.0",
         "admission_counts": dict(admission_counts),
         "provisional_count": admission_counts["PROVISIONAL"],
         "counts": dict(counts),
@@ -302,9 +260,9 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
         "findings": findings,
         "ignored_matches": ignored,
         "warnings": [
-            ("FSU findings are reassessed each scan; missing EPSS uses FSU for non-KEV findings."
-             if poc_kev_epss else
-             "Urgent quartile-policy findings block CI."),
+            "CISA BOD 26-04 drives decisions; the configured EPSS quartile amplifier applies only after BOD.",
+            "Missing EPSS uses the declared neutral Q2 bin; KEV and BOD urgent guards remain unchanged.",
+            "Only final 3D/3DF outcomes block CI (incomplete decisions require review).",
             "CISA Vulnrichment ADP values are preferred; missing SSVC uses local defaults. Lookup failures require review.",
             "KEV=N is provisional based on absence from completed Grype DB enrichment; direct CISA catalog freshness is not separately verified.",
             "VEX ignore results must be reviewed for precise product/component scope before enforcement."
@@ -324,32 +282,29 @@ def report_legend(report: dict) -> list[str]:
              "| Automatable | Y/N = exploitation can/cannot be automated according to SSVC or the recorded fallback. |",
              "| TI | P = Partial technical impact; T = Total. |",
              "| SSVC lookup | FOUND = CISA values available; NO_SSVC / NO_RECORD = defaults used; lookup failures require review. |",
-             "| Severity | Scanner/vendor severity. The current probability policy does not use it to assign deadlines. |",
-             "| EPSS bin | Q1–Q4 are percentile quartiles. The PoC probability policy uses EPSS probability from decision.json. |",
-             "| Base / Final | BOD outcome / active policy target. 30D and 60D mean days; 3DF includes forensic follow-up. |",
+             "| Severity | Scanner/vendor severity. The BOD 26-04 decision table uses KEV, exposure, automatable and technical impact. |",
+             "| EPSS bin | Q1–Q4 are FIRST EPSS percentile quartiles; missing EPSS uses neutral Q2. |",
+             "| Base / Final | CISA BOD 26-04 outcome / EPSS-amplified final outcome; 3DF includes forensic follow-up. |",
              "| FSU | Address at a future scheduled upgrade/rebuild; no separate fixed-day deadline. Reevaluate each scan. |",
              "| Defaulted inputs | Assumptions, when reported. Source fields in decision.json provide the full provenance. |",
-             "| Decision rule / Admission reason | Explain the target and gate result. POC_KEV_URGENT handles KEV; POC_EPSS_PROBABILITY handles non-KEV. |",
+             "| Decision rule / Admission reason | KEV_GUARD and URGENT_BASE_GUARD preserve BOD outcomes; AMPLIFIED applies the local EPSS table. |",
              "",
              "In enforce mode, BLOCK and REVIEW_REQUIRED fail the scan step. Shadow mode reports those decisions while allowing the step to complete.",
              "Download the security-* artifact: report.md is this summary; decision.json includes EPSS probability, input sources and decisions; grype.json and vulnrichment.json contain the scan and enrichment evidence."]
-    policy = report.get("probability_policy")
-    if policy:
-        rules = policy["non_kev"]
-        lines += ["", "### Active PoC amplifier", "",
-                  "| Condition | Final target | CI |", "|---|---|---|",
-                  "| KEV=Y | " + policy["kev"]["default"] + "; preserve " + ", ".join(policy["kev"]["preserve"]) + " | BLOCK |"]
-        upper = None
-        for threshold in rules["thresholds"]:
-            value = threshold["minimum_probability"]
-            condition = f"KEV=N, EPSS probability ≥{value:.0%}"
-            if upper is not None:
-                condition += f" and <{upper:.0%}"
-            lines.append(f"| {condition} | {threshold['outcome']} | ALLOW |")
-            upper = value
-        lines += [f"| KEV=N, below all thresholds | {rules['default']} | ALLOW |",
-                  f"| KEV=N, EPSS missing | {rules['missing']} | ALLOW |",
-                  "", "These local policy settings come from policy/epss-amplifier.json in the pinned shared action revision. Updating that file requires publishing a revision and updating caller pins."]
+    table = report["amplifier_table"]
+    lines += ["", "### Active BOD + EPSS quartile policy", "",
+              "CISA BOD 26-04 is evaluated first. The local EPSS amplifier is",
+              "configured in policy/epss-amplifier.json. KEV and base 3D/3DF outcomes",
+              "cannot be downgraded; EPSS cannot create a 3DF investigation.", "",
+              "| BOD base | Q1 | Q2 | Q3 | Q4 |",
+              "|---|---|---|---|---|"]
+    for base in ("FSU", "60D", "14D", "3D", "3DF"):
+        cells = [table[base][q] for q in ("Q1", "Q2", "Q3", "Q4")]
+        lines.append("| " + " | ".join([base, *cells]) + " |")
+    lines += ["", "The table is only applied where guards permit it.",
+              "Final 3D/3DF → BLOCK in enforce mode; FSU/60D/14D → ALLOW.",
+              "Incomplete assessment → REVIEW_REQUIRED; VEX-ignored matches remain visible."]
+
     return lines
 
 
@@ -390,7 +345,7 @@ def markdown_report(report: dict) -> str:
                 [item.get("vulnerability_id"), item.get("package"), reasons or "unknown", item.get("reason") or "Not provided"]) + " |")
     else:
         lines.append("_No findings suppressed. Having a VEX document alone does not prove a statement matched._")
-    lines += ["", "## Known MVP limits", ""] + ["- " + str(w) for w in report["warnings"]]
+    lines += ["", "## Known PoC limits", ""] + ["- " + str(w) for w in report["warnings"]]
     return "\n".join(lines) + "\n"
 
 
@@ -404,15 +359,12 @@ def main() -> None:
     p.add_argument("--vex", help="OpenVEX document for display-only suppression reasons")
     p.add_argument("--output", required=True)
     p.add_argument("--markdown", required=True)
-    p.add_argument("--poc-kev-epss", action=argparse.BooleanOptionalAction, default=False,
-                   help="Use the PoC KEV gate and EPSS probability targets")
     a = p.parse_args()
     base, amp, mapping = load_policy(Path(a.policy_dir))
     data = json.loads(Path(a.input).read_text(encoding="utf-8"))
     enrichment = json.loads(Path(a.vulnrichment).read_text(encoding="utf-8")) if a.vulnrichment else None
     vex = json.loads(Path(a.vex).read_text(encoding="utf-8")) if a.vex else None
-    report = evaluate(data, a.exposure, a.image, base, amp, mapping, enrichment, vex,
-                      poc_kev_epss=a.poc_kev_epss)
+    report = evaluate(data, a.exposure, a.image, base, amp, mapping, enrichment, vex)
     Path(a.output).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     Path(a.markdown).write_text(markdown_report(report), encoding="utf-8")
     print(report["admission"])

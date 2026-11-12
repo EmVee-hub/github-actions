@@ -109,7 +109,7 @@ class PolicyTests(unittest.TestCase):
         self.assertNotIn("## 1. Legend", md)
         self.assertIn("## How to read and use this report", md)
         self.assertLess(md.index("## Scan results"), md.index("## VEX-suppressed findings"))
-        self.assertLess(md.index("## VEX-suppressed findings"), md.index("## Known MVP limits"))
+        self.assertLess(md.index("## VEX-suppressed findings"), md.index("## Known PoC limits"))
         for column in ("| KEV |", "| PE |", "| Automatable |", "| TI |", "| EPSS bin |", "| Base |", "| Final |", "| Decision rule |"):
             self.assertIn(column, md)
         self.assertIn("VEX-suppressed", md)
