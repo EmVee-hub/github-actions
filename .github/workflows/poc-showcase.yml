@@ -1,0 +1,102 @@
+name: Container security PoC showcase
+
+# Manual, synthetic-only demonstrations; zero cloud credentials or live collection.
+# The full regression suite runs automatically in ci.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Choose the PoC demonstration
+        type: choice
+        required: true
+        default: all
+        options: [all, runtime, inspector, defender]
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    name: AKS/EKS Pod correlation + BOD/EPSS (synthetic)
+    if: ${{ inputs.scenario == 'all' || inputs.scenario == 'runtime' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build synthetic runtime inventory and evaluate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/runtime-demo"
+          FIX=tests/fixtures/runtime
+          OUT="$RUNNER_TEMP/runtime-demo"
+          python3 scripts/runtime_workloads.py --platform EKS --cluster eks-demo --account-id 123456789012 --region eu-north-1 --input "$FIX/eks-pods.json" --output "$OUT/eks.json"
+          python3 scripts/runtime_workloads.py --platform AKS --cluster aks-demo --subscription-id 11111111-1111-1111-1111-111111111111 --input "$FIX/aks-pods.json" --output "$OUT/aks.json"
+          python3 scripts/runtime_assess.py --inspector "$FIX/inspector-normalized.json" --defender "$FIX/defender-observations.json" \
+            --inventory "$OUT/eks.json" "$OUT/aks.json" \
+            --intel "$FIX/intelligence.json" --vex-map "$FIX/vex-map.json" \
+            --output "$OUT/decisions.json" --markdown "$OUT/report.md"
+          cat "$OUT/report.md" >> "$GITHUB_STEP_SUMMARY"
+          echo '**SYNTHETIC fixture only — does not prove live cloud coverage.**' >> "$GITHUB_STEP_SUMMARY"
+      - name: Regression tests
+        run: python3 -m unittest discover -s tests -p 'test_runtime_*.py' -v
+      - name: Upload synthetic comparison evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: runtime-bod-epss-synthetic
+          path: ${{ runner.temp }}/runtime-demo/
+          retention-days: 7
+
+  inspector:
+    name: AWS Inspector container findings (synthetic)
+    if: ${{ inputs.scenario == 'all' || inputs.scenario == 'inspector' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Normalize synthetic ECR container-image findings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/collect_inspector.py \
+            --input-file tests/fixtures/inspector-debug.json \
+            --output "$RUNNER_TEMP/poc-inspector"
+          echo '## AWS Inspector PoC (synthetic)' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No AWS credentials or live cloud collection. ECR-only findings are **not** proof of running EKS Pods.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload synthetic Inspector normalization
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: poc-inspector-synthetic
+          path: ${{ runner.temp }}/poc-inspector/
+          if-no-files-found: error
+          retention-days: 7
+
+  defender:
+    name: Azure Defender container findings (synthetic)
+    if: ${{ inputs.scenario == 'all' || inputs.scenario == 'defender' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Normalize synthetic AKS container-image assessments
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/read_azure.py \
+            --input tests/fixtures/defender-sample.json \
+            --out "$RUNNER_TEMP/poc-defender"
+          echo '## Azure Defender PoC (synthetic)' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No Azure credentials or live cloud collection. Defender image identity and coverage require tenant validation.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload synthetic Defender normalization
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: poc-defender-synthetic
+          path: ${{ runner.temp }}/poc-defender/
+          if-no-files-found: error
+          retention-days: 7

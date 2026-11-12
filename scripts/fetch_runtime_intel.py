@@ -23,7 +23,7 @@ EPSS_URL = "https://api.first.org/data/v1/epss"
 
 def get_json(url: str, timeout: int = 30) -> dict:
     request = urllib.request.Request(url, headers={"Accept": "application/json",
-                                                   "User-Agent": "runtime-security-mvp/0.1"})
+                                                   "User-Agent": "runtime-security-poc/0.1"})
     with urllib.request.urlopen(request, timeout=timeout) as response:
         # Limit untrusted response size.
         raw = response.read(10_000_001)

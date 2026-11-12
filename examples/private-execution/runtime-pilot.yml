@@ -1,6 +1,7 @@
-name: Runtime vulnerability pilot (private execution repository ONLY)
+name: AKS/EKS container security PoC — private runtime pilot template
 
-# COPY this template into a PRIVATE execution repository and review permissions.
+# NEXT-PHASE VALIDATION: COPY this PoC pilot template into a PRIVATE repository;
+# review permissions and image identity before considering any operational MVP.
 # DO NOT execute cloud collection from a public repo: real findings and workload
 # metadata are sensitive. Only manual invocation is supported initially.
 on:

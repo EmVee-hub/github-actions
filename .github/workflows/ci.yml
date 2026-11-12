@@ -1,4 +1,4 @@
-name: Central security CI
+name: Container security PoC CI
 
 # Unit and synthetic integration tests only: no credentials or live cloud access.
 on:
