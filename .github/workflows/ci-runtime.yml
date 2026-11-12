@@ -11,6 +11,7 @@ on:
       - scripts/evaluate.py
       - policy/**
       - tests/test_runtime_*.py
+      - tests/fixtures/runtime/**
       - .github/workflows/ci-runtime.yml
   pull_request:
     paths:
@@ -20,6 +21,7 @@ on:
       - scripts/evaluate.py
       - policy/**
       - tests/test_runtime_*.py
+      - tests/fixtures/runtime/**
       - .github/workflows/ci-runtime.yml
 
 permissions:
