@@ -1,0 +1,59 @@
+name: AWS Inspector collection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aws-inspector-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    # Set AWS_INSPECTOR_REGIONS to a JSON array, e.g. ["eu-north-1"].
+    strategy:
+      fail-fast: false
+      matrix:
+        region: ${{ fromJSON(vars.AWS_INSPECTOR_REGIONS) }}
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 30
+    environment: aws-security-read
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check runner prerequisites
+        run: |
+          set -euo pipefail
+          python3 --version
+          aws --version
+          python3 -m unittest discover -s tests -v
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_INSPECTOR_ROLE_ARN }}
+          aws-region: ${{ matrix.region }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: inspector-${{ github.run_id }}
+          unset-current-credentials: true
+          mask-aws-account-id: true
+      - name: Collect and normalize
+        env:
+          INSPECTOR_REGION: ${{ matrix.region }}
+          REPORT_DIR: ${{ runner.temp }}/inspector-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.region }}
+        run: |
+          set -euo pipefail
+          python3 scripts/collect_inspector.py --region "$INSPECTOR_REGION" --output "$REPORT_DIR"
+          echo 'Inspector collection completed. VEX and decision policy are not evaluated by this job.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve collection evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: inspector-${{ matrix.region }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/inspector-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.region }}/
+          if-no-files-found: warn
+          retention-days: 14
