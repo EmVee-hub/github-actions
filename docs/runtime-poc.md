@@ -25,8 +25,7 @@ but an exclusion count is retained to avoid treating missing evidence as safe.
    **not** prove a running image match.
 4. Fetch authoritative and explicitly complete CISA KEV, FIRST EPSS
    **percentile**, and CISA-ADP Vulnrichment SSVC.
-5. Apply the same unchanged BOD 26-04 + local EPSS amplifier policy as the
-   Grype CI evaluator. The amplifier does not manufacture KEV or 3DF.
+5. Calculate the BOD 26-04 outcome and apply the same local KEV and EPSS probability targets as Grype CI.
 6. Load operator-reviewed project VEX from an explicit local project/path
    map. Exact CVE, immutable image product, and versioned package PURL are
    required to consider a not_affected statement for suppression.
@@ -197,3 +196,4 @@ persistent triage/disposition store.
 - FIRST EPSS API: https://api.first.org/epss/
 - CISA KEV: https://www.cisa.gov/known-exploited-vulnerabilities-catalog
 - CERTCC decision tables: https://github.com/CERTCC/SSVC
+

@@ -17,6 +17,10 @@ inputs:
     description: 'shadow (report only) or enforce (fail on BLOCK / REVIEW_REQUIRED)'
     required: false
     default: shadow
+  poc-kev-epss:
+    description: Use the PoC KEV gate and 5% / 10% EPSS probability targets
+    required: false
+    default: 'false'
   grype-binary:
     description: Path to preinstalled Grype CLI; defaults to grype on PATH
     required: false
@@ -44,7 +48,9 @@ runs:
         INPUT_IMAGE: ${{ inputs.image }}
         INPUT_VEX_PATH: ${{ inputs.vex-path }}
         INPUT_EXPOSURE: ${{ inputs.exposure }}
+        INPUT_POC_KEV_EPSS: ${{ inputs.poc-kev-epss }}
         INPUT_MODE: ${{ inputs.mode }}
         GRYPE_BIN: ${{ inputs.grype-binary }}
         REPORT_DIR: ${{ inputs.report-directory }}
       run: bash "$GITHUB_ACTION_PATH/run.sh"
+
