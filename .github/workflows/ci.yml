@@ -1,0 +1,30 @@
+name: Central security CI
+
+# Unit and synthetic integration tests only: no credentials or live cloud access.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: central-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Security unit and offline integration tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify Python source parses
+        run: python3 -m compileall -q scripts tests
+      - name: Run policy, Inspector, Defender, AKS/EKS runtime and VEX tests
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v

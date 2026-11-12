@@ -124,22 +124,33 @@ A successful collection is not a deployment admission decision.
 
 See [Azure setup and offline debug](docs/azure-defender.md). The collector retains
 individual assessments and provisional CVE observations. Runtime correlation, VEX
-matching and policy evaluation remain pending for Azure.
+matching and policy evaluation are implemented for synthetic AKS Pod evidence, but live Defender identity mapping is not yet validated.
 
-## Independent CI workflows
+## GitHub Actions workflows — consolidated
 
-| Workflow | Tests | Triggered by |
-|---|---|---|
-| `ci-defender.yml` — Defender CI | `test_read_azure.py` | Defender collector, query, fixtures, docs and workflows |
-| `ci-aws.yml` — AWS CI | `test_inspector.py` | Inspector collector, IAM, fixtures, docs and workflows |
-| `ci-policy.yml` — Policy CI | `test_evaluate.py` | Shared policy, Grype action, evaluator and fixtures |
+The former `ci-policy.yml`, `ci-aws.yml`, `ci-defender.yml` and
+`ci-runtime.yml` are consolidated into **one** `.github/workflows/ci.yml`.
+It runs on every PR, pushes to `main`, or on manual dispatch, and executes
+all offline Python tests (policy, VEX, Vulnrichment, Inspector, Defender,
+AKS/EKS Pod inventory/correlation and the synthetic end-to-end CLI replay).
 
-Each workflow supports manual dispatch and uses path filters for pushes and pull
-requests. A provider-only change does not trigger the other provider's CI. None
-of these CI workflows logs in to a cloud or collects live findings. The runtime
-collection workflows also run only their respective provider tests.
+The synthetic `.github/workflows/runtime-demo.yml` is now **manual-only**.
+It publishes a detailed comparison and artifacts for walkthroughs; automated
+assertions still run in central CI. The old `defender-debug.yml` workflow was
+retired because its input/fixture normalization remains available directly:
 
-The old `test.yml` workflow is replaced. If branch protection requires its old
-check, update that configuration before merging. Path-filtered workflows should
-not be unconditional required checks: a skipped workflow may leave such a check
-pending. No branch-protection settings are changed here.
+```bash
+python3 scripts/read_azure.py --input tests/fixtures/defender-sample.json --out /tmp/defender-debug
+python3 scripts/collect_inspector.py --input-file tests/fixtures/inspector-debug.json --output /tmp/inspector-debug
+```
+
+**Live collectors remain separate for now:** `defender-cloud.yml` and
+`aws-inspector.yml` still have their existing manual/scheduled execution
+and cloud authentication behavior. Their migration to the documented
+private runtime pilot is a separate, security-sensitive change. This
+consolidation does not run cloud collection in central CI.
+
+**Branch protection:** if `Policy CI tests`, `AWS CI tests`,
+`Defender CI tests` or `Offline AKS/EKS Pod correlation + BOD/EPSS tests`
+are required checks, update the rules to the new
+`Security unit and offline integration tests` check **when merging**.
