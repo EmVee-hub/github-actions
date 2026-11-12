@@ -83,18 +83,18 @@ class PolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ev.evaluate({}, "unknown", "test", BASE, AMP, MAPPING)
 
-    def test_markdown_report_starts_with_legend(self):
+    def test_markdown_report_contains_scan_only_without_legend(self):
         data = json.loads((ROOT / "tests/fixtures/grype-sample.json").read_text())
         report = ev.evaluate(data, "public", "demo:sha", BASE, AMP, MAPPING)
         md = ev.markdown_report(report)
-        self.assertTrue(md.startswith("# CI Vulnerability Assessment\n\n## 1. Legend"))
-        self.assertLess(md.index("## 1. Legend"), md.index("## 2. Scan results"))
-        self.assertLess(md.index("## 2. Scan results"), md.index("## 3. OpenVEX"))
+        self.assertTrue(md.startswith("# CI Vulnerability Assessment\n\n## Scan results"))
+        self.assertNotIn("## 1. Legend", md)
+        self.assertNotIn("## Decision rule legend", md)
+        self.assertLess(md.index("## Scan results"), md.index("## VEX-suppressed findings"))
+        self.assertLess(md.index("## VEX-suppressed findings"), md.index("## Known MVP limits"))
         for column in ("| KEV |", "| PE |", "| Automatable |", "| TI |", "| EPSS bin |", "| Base |", "| Final |", "| Decision rule |"):
             self.assertIn(column, md)
-        self.assertIn("KEV_GUARD", md)
         self.assertIn("VEX-suppressed", md)
-
 
 
 if __name__ == "__main__":

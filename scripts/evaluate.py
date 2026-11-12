@@ -210,8 +210,7 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
 def markdown_report(report: dict) -> str:
     esc = lambda x: str(x or "").replace("|", "\\|").replace("\n", " ")
     lines = ["# CI Vulnerability Assessment", ""]
-    lines += ["## 1. Legend — how to read the scan table","","**Inputs and finding columns**","","| Column | Meaning |","|---|---|","| CVE/advisory | Vulnerability identifier reported by Grype; CVE is preferred when mapped. |","| Package | Name of the affected software component in the scanned image. |","| Severity | Scanner-reported Critical / High / Medium / Low. This does **not** directly decide the policy deadline. |","| KEV | CISA Known Exploited Vulnerabilities: `Y` = known exploited, `N` = not annotated by the refreshed Grype DB (provisional), `UNKNOWN` = could not resolve. |","| PE | Publicly Exposed: `Y` = public (or unknown default), `N` = declared internal. Context is supplied by the workflow, not proven by Grype. |","| Automatable | SSVC `Y` / `N`: whether exploitation can be automated; CISA Vulnrichment when available, otherwise `Y` default. |","| TI | SSVC Technical Impact: `P` = partial, `T` = total; CISA Vulnrichment when available, otherwise documented CVSS heuristic/default. |","| SSVC lookup | `FOUND` = CISA SSVC used; `NO_SSVC` / `NO_RECORD` = fallback used; `FETCH_ERROR` / `INVALID_SSVC` = needs review; `NO_CVE` / `NOT_QUERIED` = no applicable lookup. |","| EPSS bin | Exploit Prediction Scoring System **percentile**: Q1 = below 25th, Q2 = 25th–below 50th, Q3 = 50th–below 75th, Q4 = 75th–100th. Missing EPSS uses neutral Q2. |","| Base | Unchanged CISA BOD 26-04 decision, based on KEV, PE, Automatable and TI. |","| Final | Base after our local EPSS quartile policy and safety guards. This is the **remediation priority**, not the scanner severity. |","| Decision rule | Explains why the final result was calculated or retained; see below. |","","**Decision rule reference**","","| Rule | Meaning |","|---|---|","| `AMPLIFIED` | Applied our EPSS quartile table; the output may remain unchanged (for example Q2). |","| `KEV_GUARD` | KEV is `Y`; protect the original BOD result from EPSS changes. |","| `URGENT_BASE_GUARD` | BOD already returned 3D or 3DF; do not downgrade. |","| `EPSS_UNAVAILABLE_NEUTRAL` | EPSS missing; apply neutral Q2. Absence is not evidence of low risk. |","| `KEV_UNKNOWN` | CVE/KEV cannot be evaluated safely; needs review. |","| `VULNRICHMENT_LOOKUP_FAILED` | CISA SSVC lookup failed or returned invalid data; needs review. |","","**Outcome and admission reference**","","| Value | Interpretation |","|---|---|","| FSU | Fix on the next scheduled major upgrade/rebuild **and deployment**. |","| 60D / 14D / 3D | Remediation due within 60 / 14 / 3 days, respectively. |","| 3DF | Three-day outcome **plus forensic investigation/triage**; not proof of compromise. |","| ALLOW | No evaluated 3D/3DF and no incomplete findings. |","| BLOCK | At least one 3D or 3DF outcome; in `shadow` mode this is reported without failing the job. |","| REVIEW_REQUIRED | An essential input/enrichment is incomplete and no 3D/3DF finding already causes BLOCK. |","| VEX-suppressed | Grype moved the exact VEX-matched finding into `ignoredMatches`; it is excluded from the active gate but retained as evidence. |","","**Source vs rule:** Scanner source is Grype, SSVC inputs come from CISA Vulnrichment or documented fallbacks, and `Decision rule` describes how our policy was applied.",""]
-    lines += ["## 2. Scan results", "",
+    lines += ["## Scan results", "",
               "- Image: `" + esc(report["image"]) + "`",
               "- Admission: **" + esc(report["admission"]) + "**",
               "- Base model: `" + esc(report["model"]) + "`",
@@ -228,7 +227,7 @@ def markdown_report(report: dict) -> str:
         lines.append("| " + " | ".join(esc(c) for c in cells) + " |")
     if not report["findings"]:
         lines.append("| No active findings | — | — | — | — | — | — | — | — | — | — | — |")
-    lines += ["","## 3. OpenVEX-suppressed findings","","VEX can change **applicability**, not the CVE severity. Only findings accepted by Grype's VEX matching are excluded from the active gate; the original records remain below.",""]
+    lines += ["","## VEX-suppressed findings","","VEX can change **applicability**, not the CVE severity. Only findings accepted by Grype's VEX matching are excluded from the active gate; the original records remain below.",""]
     if report["ignored_matches"]:
         lines += ["| Vulnerability | Package | Ignore evidence |","|---|---|---|"]
         for item in report["ignored_matches"]:
@@ -238,7 +237,7 @@ def markdown_report(report: dict) -> str:
                 [item.get("vulnerability_id"), item.get("package"), reasons or "unknown"]) + " |")
     else:
         lines.append("_No findings suppressed. Having a VEX document alone does not prove a statement matched._")
-    lines += ["", "## 4. Known MVP limits", ""] + ["- " + str(w) for w in report["warnings"]]
+    lines += ["", "## Known MVP limits", ""] + ["- " + str(w) for w in report["warnings"]]
     return "\n".join(lines) + "\n"
 
 
