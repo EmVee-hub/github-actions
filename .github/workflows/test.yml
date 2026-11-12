@@ -1,7 +1,7 @@
 name: Policy unit tests
 on:
   push:
-    branches: [main]
+    branches: [main, feature/azure-defender]
   pull_request:
 permissions:
   contents: read
@@ -12,3 +12,4 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run dependency-free tests
         run: python3 -m unittest discover -s tests -v
+

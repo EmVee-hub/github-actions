@@ -1,7 +1,14 @@
 # github-actions — Grype / OpenVEX / BOD+EPSS CI starter
 
-This repository contains only the **CI security action**, the versioned decision policy,
-and unit tests. Azure Defender / AWS Inspector runtime readers are **not in this CI milestone**.
+This repository contains the **CI security action**, the versioned decision policy,
+unit tests, and an Azure Defender evidence-collection MVP.
+
+## Azure Defender collector
+
+See [Azure setup and limitations](docs/azure-defender.md) for the scheduled/manual
+OIDC workflow, subscription configuration, and output contract. This first slice
+collects individual assessments; runtime correlation, OpenVEX matching, and policy
+evaluation remain unimplemented for Azure. It does not issue an admission verdict.
 
 ## Action: `actions/grype-policy-scan`
 
@@ -83,3 +90,4 @@ Upstream references:
 - [Grype VEX and filtering](https://oss.anchore.com/docs/guides/vulnerability/filter-results/)
 - [Grype JSON schema and formats](https://oss.anchore.com/docs/reference/grype/json/)
 - [GitHub composite actions](https://docs.github.com/en/actions/tutorials/create-actions/create-a-composite-action)
+
