@@ -1,0 +1,43 @@
+name: Runtime correlation and policy CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/runtime_workloads.py
+      - scripts/runtime_assess.py
+      - scripts/fetch_runtime_intel.py
+      - scripts/evaluate.py
+      - policy/**
+      - tests/test_runtime_*.py
+      - .github/workflows/ci-runtime.yml
+  pull_request:
+    paths:
+      - scripts/runtime_workloads.py
+      - scripts/runtime_assess.py
+      - scripts/fetch_runtime_intel.py
+      - scripts/evaluate.py
+      - policy/**
+      - tests/test_runtime_*.py
+      - .github/workflows/ci-runtime.yml
+
+permissions:
+  contents: read
+
+jobs:
+  offline-runtime-policy:
+    name: Offline AKS/EKS/ECS correlation + BOD/EPSS tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Test workload parsers, correlation, VEX and authoritative intelligence
+        run: |
+          python3 -m unittest discover -s tests -p 'test_runtime_*.py' -v
+      - name: Test existing evaluator and Vulnrichment compatibility
+        run: |
+          python3 -m unittest discover -s tests -p 'test_evaluate.py' -v
+          python3 -m unittest discover -s tests -p 'test_vulnrichment.py' -v
