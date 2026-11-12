@@ -41,7 +41,34 @@ class InventoryTests(unittest.TestCase):
     def test_not_running_excluded(self):
         payload = __import__("copy").deepcopy(POD)
         payload["items"][0]["status"]["phase"] = "Pending"
+        payload["items"][0]["status"]["containerStatuses"][0]["state"] = {"waiting": {"reason": "ContainerCreating"}}
         self.assertEqual(inv.parse_pods(payload, "AKS", "aks", "subscription")["workloads"], [])
+
+    def test_running_init_container_during_pending_pod(self):
+        payload = __import__("copy").deepcopy(POD)
+        pod = payload["items"][0]
+        pod["status"]["phase"] = "Pending"
+        pod["spec"]["containers"] = []
+        pod["status"]["containerStatuses"] = []
+        pod["spec"]["initContainers"] = [{"name": "init", "image": IMG}]
+        pod["status"]["initContainerStatuses"] = [{"name": "init", "image": IMG,
+            "imageID": "docker-pullable://" + REG + "/payments/api@" + D,
+            "state": {"running": {"startedAt": "2026-11-12T00:00:00Z"}}}]
+        records = inv.parse_pods(payload, "EKS", "demo", ACCOUNT, "eu-north-1")
+        self.assertEqual(len(records["workloads"]), 1)
+        self.assertEqual(records["workloads"][0]["container_role"], "init")
+
+    def test_ephemeral_container_and_terminating_pod_still_running(self):
+        payload = __import__("copy").deepcopy(POD)
+        pod = payload["items"][0]
+        pod["metadata"]["deletionTimestamp"] = "2026-11-12T00:01:00Z"
+        pod["spec"]["ephemeralContainers"] = [{"name": "debug", "image": IMG}]
+        pod["status"]["ephemeralContainerStatuses"] = [{"name": "debug", "image": IMG,
+            "imageID": "docker-pullable://" + REG + "/payments/api@" + D,
+            "state": {"running": {"startedAt": "2026-11-12T00:00:00Z"}}}]
+        records = inv.parse_pods(payload, "EKS", "demo", ACCOUNT, "eu-north-1")
+        self.assertEqual({w["container_role"] for w in records["workloads"]}, {"app", "ephemeral"})
+        self.assertTrue(all(w["pod_terminating"] for w in records["workloads"]))
 
     def test_ecs_image_digest(self):
         payload = {"tasks": [

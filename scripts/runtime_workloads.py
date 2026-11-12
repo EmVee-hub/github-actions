@@ -66,29 +66,41 @@ def parse_pods(payload: dict, platform: str, cluster: str, scope: str,
         namespace, name = md.get("namespace"), md.get("name")
         if not namespace or not name:
             raise ValueError("Pod missing namespace/name")
-        # Terminal or pending workloads cannot be marked as running.
-        if status.get("phase") != "Running" or md.get("deletionTimestamp"):
+        # A Pod in Pending may still have an actively running init container.
+        # A terminating Pod may still contain running containers until it stops.
+        # Never infer runtime presence from Pod phase alone.
+        if status.get("phase") not in ("Running", "Pending"):
             continue
-        declared = {c.get("name"): c.get("image") for c in (spec.get("containers") or [])}
-        for c in status.get("containerStatuses") or []:
-            if not (c.get("state") or {}).get("running"):
-                continue
-            image = c.get("image") or declared.get(c.get("name")) or ""
-            image_id = c.get("imageID") or ""
-            digest = manifest_digest(image_id, image)
-            registry, repository = locator(image)
-            entry = {
-                "platform": platform, "cluster": cluster, "account_id": scope if platform == "EKS" else None,
-                "subscription_id": scope if platform == "AKS" else None, "region": region,
-                "namespace": namespace, "workload": name, "container": c.get("name"),
-                "workload_uid": md.get("uid"), "image": image, "image_id": image_id,
-                "image_digest": digest, "registry": registry, "repository": repository,
-                "architecture": None, "state": "RUNNING", **labels(md),
-            }
-            if digest and registry and repository:
-                workloads.append(entry)
-            else:
-                unresolved.append({**entry, "reason": "IMAGE_MANIFEST_DIGEST_OR_REGISTRY_UNKNOWN"})
+        groups = (
+            ("app", "containers", "containerStatuses"),
+            ("init", "initContainers", "initContainerStatuses"),
+            ("ephemeral", "ephemeralContainers", "ephemeralContainerStatuses"),
+        )
+        for role, declared_key, statuses_key in groups:
+            declared = {c.get("name"): c.get("image")
+                        for c in (spec.get(declared_key) or [])}
+            for c in status.get(statuses_key) or []:
+                if not (c.get("state") or {}).get("running"):
+                    continue
+                image = c.get("image") or declared.get(c.get("name")) or ""
+                image_id = c.get("imageID") or ""
+                digest = manifest_digest(image_id, image)
+                registry, repository = locator(image)
+                entry = {
+                    "platform": platform, "cluster": cluster,
+                    "account_id": scope if platform == "EKS" else None,
+                    "subscription_id": scope if platform == "AKS" else None,
+                    "region": region, "namespace": namespace, "workload": name,
+                    "container": c.get("name"), "container_role": role,
+                    "workload_uid": md.get("uid"), "image": image, "image_id": image_id,
+                    "image_digest": digest, "registry": registry, "repository": repository,
+                    "architecture": None, "state": "RUNNING",
+                    "pod_terminating": bool(md.get("deletionTimestamp")), **labels(md),
+                }
+                if digest and registry and repository:
+                    workloads.append(entry)
+                else:
+                    unresolved.append({**entry, "reason": "IMAGE_MANIFEST_DIGEST_OR_REGISTRY_UNKNOWN"})
     return {"workloads": workloads, "unresolved": unresolved}
 
 
