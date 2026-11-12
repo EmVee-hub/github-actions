@@ -111,26 +111,63 @@ def write(path, value):
     temporary.replace(path)
 
 
+def load_input(path):
+    """Read offline evidence without credentials or subscription configuration."""
+    payload = json.loads(sys.stdin.read() if str(path) == '-' else path.read_text())
+    if isinstance(payload, dict) and 'data' in payload:
+        if payload.get('$skipToken') or str(payload.get('resultTruncated', False)).lower() == 'true':
+            raise ValueError('Offline ARG response must not be truncated')
+        payload = payload['data']
+    elif isinstance(payload, dict) and 'id' in payload:
+        payload = [payload]
+    if not isinstance(payload, list):
+        raise ValueError('Expected an assessment, an array, or an ARG data envelope')
+    identities = set()
+    for row in payload:
+        if not isinstance(row, dict) or not isinstance(row.get('id'), str) or not row['id']:
+            raise ValueError('Every assessment needs a nonempty id')
+        if not isinstance(row.get('subscriptionId'), str):
+            raise ValueError('Every assessment needs a subscriptionId')
+        UUID(row['subscriptionId'])
+        if not isinstance(row.get('properties'), dict):
+            raise ValueError('Every assessment needs properties')
+        for key in ('additionalData', 'metadata', 'status', 'resourceDetails'):
+            if row['properties'].get(key) is not None and not isinstance(row['properties'][key], dict):
+                raise ValueError('Expected object in properties.' + key)
+        if row['id'].lower() in identities:
+            raise ValueError('Duplicate assessment id')
+        identities.add(row['id'].lower())
+    return payload
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--input', type=Path, help='Offline JSON file, or - for pasted stdin; skips Azure completely')
     args = parser.parse_args()
     # Refuse to mix previous-run evidence with this run.
     args.out.mkdir(parents=True, exist_ok=False)
     summary = {'collected_at': datetime.now(timezone.utc).isoformat(),
+               'mode': 'DEBUG_OFFLINE' if args.input else 'LIVE',
                'collection_status': 'INCOMPLETE', 'runtime_coverage': 'UNKNOWN',
                'policy_evaluation': 'NOT_EVALUATED', 'subscriptions': []}
     try:
-        selected = subscriptions(os.environ.get('AZURE_SUBSCRIPTION_IDS', ''))
-        query = (ROOT / 'queries/assessments.kql').read_text()
-        write(args.out / 'query.json', {'query': query, 'api_version': '2024-04-01'})
-        all_rows = []
-        # Separate calls prevent an inaccessible subscription being hidden by another scope.
-        for subscription in selected:
-            rows = collect(subscription, query)
-            write(args.out / (subscription + '.raw.json'), rows)
-            all_rows.extend(rows)
-            summary['subscriptions'].append({'id': subscription, 'assessment_count': len(rows)})
+        if args.input:
+            all_rows = load_input(args.input)
+            write(args.out / 'input.raw.json', all_rows)
+            for subscription, count in Counter(row['subscriptionId'] for row in all_rows).items():
+                summary['subscriptions'].append({'id': subscription, 'assessment_count': count})
+        else:
+            selected = subscriptions(os.environ.get('AZURE_SUBSCRIPTION_IDS', ''))
+            query = (ROOT / 'queries/assessments.kql').read_text()
+            write(args.out / 'query.json', {'query': query, 'api_version': '2024-04-01'})
+            all_rows = []
+            # Separate calls prevent an inaccessible subscription being hidden by another scope.
+            for subscription in selected:
+                rows = collect(subscription, query)
+                write(args.out / (subscription + '.raw.json'), rows)
+                all_rows.extend(rows)
+                summary['subscriptions'].append({'id': subscription, 'assessment_count': len(rows)})
         observations, unresolved = normalize(all_rows)
         write(args.out / 'observations.json', observations)
         write(args.out / 'unresolved.json', unresolved)

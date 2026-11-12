@@ -1,6 +1,10 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
+import tempfile
+import json
+import io
 
 spec = importlib.util.spec_from_file_location('collector', Path(__file__).resolve().parents[1] / 'scripts/read_azure.py')
 c = importlib.util.module_from_spec(spec)
@@ -13,6 +17,36 @@ def row(identity='a', cves=None):
 
 
 class CollectorTests(unittest.TestCase):
+    def test_offline_main_never_calls_azure(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / 'output'
+            source = Path(__file__).parent / 'fixtures/defender-sample.json'
+            with patch('sys.argv', ['read_azure', '--input', str(source), '--out', str(output)]), patch.object(c, 'collect', side_effect=AssertionError('Azure called')), patch.object(c.subprocess, 'run', side_effect=AssertionError('CLI called')), patch.dict(c.os.environ, {}, clear=True):
+                self.assertEqual(c.main(), 0)
+            summary = json.loads((output / 'summary.json').read_text())
+            self.assertEqual(summary['mode'], 'DEBUG_OFFLINE')
+            self.assertEqual(summary['observation_count'], 1)
+            self.assertEqual(summary['unresolved_count'], 1)
+            self.assertEqual(summary['policy_evaluation'], 'NOT_EVALUATED')
+
+    def test_offline_stdin_forms(self):
+        item = row(cves=[{'CveId': 'CVE-2021-44228'}])
+        for payload in (item, [item], {'data': [item]}, []):
+            with patch('sys.stdin', io.StringIO(json.dumps(payload))):
+                self.assertEqual(c.load_input(Path('-')), [] if payload == [] else [item])
+
+    def test_offline_rejects_bad_or_partial_input(self):
+        for payload in ({'data': [], '$skipToken': 'next'}, {'data': [], 'resultTruncated': True}, [row(), row()], [None], {'arbitrary': 1}):
+            with patch('sys.stdin', io.StringIO(json.dumps(payload))), self.assertRaises(ValueError):
+                c.load_input(Path('-'))
+
+    def test_invalid_json_fails_with_summary(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / 'output'
+            with patch('sys.argv', ['read_azure', '--input', '-', '--out', str(output)]), patch('sys.stdin', io.StringIO('{bad')), patch('sys.stderr', io.StringIO()):
+                self.assertEqual(c.main(), 1)
+            self.assertEqual(json.loads((output / 'summary.json').read_text())['collection_status'], 'INCOMPLETE')
+
     def test_pagination(self):
         requests = []
         def send(body):

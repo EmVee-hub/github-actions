@@ -61,6 +61,47 @@ Runtime threat alerts (malware, anomalous execution, compromise) require a separ
 
 ## Local validation
 
+### Offline debug: paste data instead of fetching Azure
+
+No Azure CLI, credentials, OIDC, or subscription environment variables are needed.
+Both modes use the same normalization function. Offline output is explicitly marked
+`mode: DEBUG_OFFLINE`; it cannot establish runtime coverage or a policy verdict.
+
+Run the bundled synthetic example from the repository root:
+
+```bash
+python3 scripts/read_azure.py --input tests/fixtures/defender-sample.json --out /tmp/defender-debug-1
+```
+
+Or save your JSON as a file and pass `--input your-data.json`. To paste directly:
+
+```bash
+python3 scripts/read_azure.py --input - --out /tmp/defender-debug-2 <<'JSON'
+[{"id":"demo-assessment","subscriptionId":"11111111-1111-1111-1111-111111111111","properties":{"metadata":{"severity":"Critical"},"status":{"code":"Unhealthy"},"additionalData":{"CvesDetails":[{"CveId":"CVE-2021-44228"}],"DetectedSoftwareVersions":["2.14.1"]}}}]
+JSON
+```
+
+Accepted shapes: a raw assessment object, an array of assessments, or an ARG response
+with a `data` array. Truncated ARG responses and duplicate IDs fail explicitly. Missing
+CVE details are retained in `unresolved.json`. Use a fresh output directory each time.
+
+Inspect `summary.json`, `observations.json`, `unresolved.json`, and `input.raw.json`.
+The bundled example produces two assessments, one CVE observation, and one unresolved
+assessment. Its data is illustrative, not a captured provider response.
+
+For GitHub UI use, `.github/workflows/defender-debug.yml` adds **Defender offline debug**:
+select **Run workflow**, select the branch, and paste JSON into `assessment_json`.
+Leaving it blank uses the bundled example. This workflow has no Azure login or OIDC
+permission. It uploads debug output and shows counts in the run summary. **Use only
+synthetic/sanitized input in this public repository**: inputs and output artifacts
+are not a confidential channel. Real tenant data can be tested with the local CLI.
+
+GitHub requires a manually dispatched workflow to exist on the default branch before
+it is available for dispatch. Until this new workflow is merged into `main`, use the
+local commands above; committing on the feature branch does not enable that UI yet.
+
+This debug path tests parsing/normalization, not VEX matching or BOD/EPSS decisions.
+
 ```bash
 python3 -m unittest discover -s tests -v
 # After az login, using a NEW output directory:
