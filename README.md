@@ -34,17 +34,19 @@ Outputs: `admission` (`ALLOW`, `BLOCK`, `REVIEW_REQUIRED`), `report-json`, `repo
 4. Ignore `ignoredMatches` for the gate, but retain them in reports.
 5. Look up distinct unsuppressed CVEs in CISA's ADP Vulnrichment data via CVE Services.
 6. Compute BOD 26-04 outcomes using published SSVC Automatable and Technical Impact when present; otherwise use our defaults.
-7. Apply the local EPSS quartile amplifier and the KEV / 3D / 3DF guards.
+7. Apply the shared PoC KEV and EPSS probability policy.
 8. Produce Grype, Vulnrichment, decision JSON and Markdown summary.
 9. In `shadow` mode, report blocking policy decisions without failing. In `enforce`, fail unless decision is `ALLOW`.
 
 ### Policy and safety limits
 
+The CI and runtime PoC reports retain the BOD result and use the same local targets. KEV gets 3D or retains 3DF where the BOD table calls for forensic follow-up. Non-KEV gets 30D at EPSS probability ≥10%, 60D at ≥5% and <10%, and FSU below 5% or when EPSS is missing. In CI, KEV blocks and incomplete assessments still require review. Runtime assessment assigns remediation targets and reports VEX and disposition status.
+
 - The BOD table is a semantic copy of the 16 outcomes of `cisa:DT_BOD2604:1.0.0`, **not the original repository's schema**.
 - `Automatable` uses the published CISA-ADP SSVC value when available; otherwise defaults to `Y`.
 - Technical Impact: prefer CISA-ADP SSVC; otherwise use the **local heuristic** `T` when CVSS v3 has both `C:H` and `I:H`, `P` for other known C/I, or conservative `T` if unavailable.
 - `KEV=Y` if Grype has nonempty `knownExploited`. If the ID maps to a CVE but no KEV annotation is present, `KEV=N` is **provisional** based on Grype's database, not independently validated against the live CISA catalog. If there is no CVE mapping, `KEV=UNKNOWN` and the action reports `REVIEW_REQUIRED`.
-- Missing EPSS is neutral Q2 with source recorded.
+- Missing EPSS maps to FSU for non-KEV findings.
 - This uses policy evaluation only; it does **not** validate that an exposure declaration matches actual networking.
 - OpenVEX statements must be reviewed before being accepted; the sanity check doesn't validate signatures, scope or whether technical justifications are true.
 - CISA SSVC lookup failures (network errors or invalid payload) produce `REVIEW_REQUIRED`, not a silent fallback. No assessment / 404 uses the documented defaults. VEX attestation verification, exposure inventory and production digest promotion remain gaps before enforcement.
@@ -159,4 +161,5 @@ Do **not** upload live security findings into this public repository.
 **PoC conclusion:** the CI and synthetic correlation pipeline demonstrates
 technical feasibility. Live-cloud coverage, approved VEX provenance, policy
 calibration, dispositions and enforcement remain MVP work.
+
 

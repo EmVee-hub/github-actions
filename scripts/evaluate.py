@@ -93,9 +93,10 @@ def epss_percentile(match: dict) -> tuple[float | None, str | None, str | None]:
     # Prefer most recently dated EPSS row. The percentile is a 0..1 fraction.
     item = sorted(candidates, key=lambda e: str(e.get("date") or ""), reverse=True)[0]
     p = item.get("percentile")
-    if p is None:
-        return None, None, str(item.get("date") or "")
-    return float(p), str(item.get("epss")), str(item.get("date") or "")
+    probability = item.get("epss")
+    return (float(p) if p is not None else None,
+            str(probability) if probability is not None else None,
+            str(item.get("date") or ""))
 
 
 def technical_impact(match: dict) -> tuple[str, str]:
@@ -172,6 +173,31 @@ def make_decision(match: dict, exposure: str, mapping: dict, amp: dict,
     return row
 
 
+def poc_priority(base: str, kev: str, probability: float | str | None) -> tuple[str, str]:
+    if kev == "Y":
+        return ("3DF" if base == "3DF" else "3D"), "POC_KEV_URGENT"
+    score = float(probability) if probability is not None else 0
+    if not 0 <= score <= 1:
+        raise ValueError(f"Invalid EPSS probability: {score}")
+    if score >= .10:
+        return "30D", "POC_EPSS_PROBABILITY"
+    if score >= .05:
+        return "60D", "POC_EPSS_PROBABILITY"
+    return "FSU", "POC_EPSS_PROBABILITY"
+
+
+def apply_poc_policy(row: dict) -> None:
+    """Apply the local KEV/EPSS targets while preserving the BOD result."""
+    row["quartile_outcome"] = row["final_outcome"]
+    if row["status"] == "INCOMPLETE":
+        row.update(admission="REVIEW_REQUIRED", admission_reason=row["rule"])
+        return
+    target, rule = poc_priority(row["base_outcome"], row["kev"], row["epss_probability"])
+    row.update(final_outcome=target, rule=rule,
+               admission="BLOCK" if row["kev"] == "Y" else "ALLOW",
+               admission_reason=rule if row["kev"] == "Y" else "POC_NON_KEV_SCHEDULED")
+
+
 def suppression_reason(match: dict, vex: dict | None, image: str) -> str:
     """Annotate Grype-ignored records only; never decide applicability here.
 
@@ -208,12 +234,16 @@ def suppression_reason(match: dict, vex: dict | None, image: str) -> str:
 
 
 def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
-             mapping: dict, enrichment: dict | None = None, vex: dict | None = None) -> dict:
+             mapping: dict, enrichment: dict | None = None, vex: dict | None = None,
+             *, poc_kev_epss: bool = False) -> dict:
     if not isinstance(data, dict) or not isinstance(data.get("matches"), list):
         raise ValueError("Invalid Grype report: expected 'matches' array")
     if exposure not in ("public", "internal", "unknown"):
         raise ValueError(f"Invalid exposure: {exposure}")
     findings = [make_decision(m, exposure, mapping, amp, enrichment) for m in data["matches"]]
+    for finding in findings:
+        if poc_kev_epss:
+            apply_poc_policy(finding)
     ignored = []
     for match in (data.get("ignoredMatches") or []):
         v = match.get("vulnerability") or {}
@@ -222,8 +252,13 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
                         "applied_ignore_rules": match.get("appliedIgnoreRules", []),
                         "reason": suppression_reason(match, vex, image)})
     counts = Counter(f.get("final_outcome") or "INCOMPLETE" for f in findings)
-    decision = "BLOCK" if counts["3D"] or counts["3DF"] else (
-        "REVIEW_REQUIRED" if counts["INCOMPLETE"] else "ALLOW")
+    admission_counts = Counter(
+        f.get("admission") or (
+            "REVIEW_REQUIRED" if f["status"] == "INCOMPLETE" else
+            "BLOCK" if f["final_outcome"] in ("3D", "3DF") else "ALLOW"
+        ) for f in findings)
+    decision = "BLOCK" if admission_counts["BLOCK"] else (
+        "REVIEW_REQUIRED" if admission_counts["REVIEW_REQUIRED"] else "ALLOW")
     return {
         "image": image,
         "exposure_input": exposure,
@@ -232,14 +267,21 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
                             else "UNKNOWN_DEFAULT_PUBLIC"),
         "assessed_at": datetime.now(timezone.utc).isoformat(),
         "model": base["id"],
-        "amplifier": amp["id"],
+        "amplifier": "LOCAL:EPSS_PROBABILITY_5_10:1.0.0" if poc_kev_epss else amp["id"],
         "admission": decision,
+        "admission_policy": ("LOCAL:POC_KEV_EPSS:1.0.0" if poc_kev_epss
+                             else "LOCAL:QUARTILE_CI:1.0.0"),
+        "admission_counts": dict(admission_counts),
+        "provisional_count": admission_counts["PROVISIONAL"],
         "counts": dict(counts),
         "vex_ignored_count": len(ignored),
         "vulnrichment_counts": dict(Counter(f["vulnrichment_status"] for f in findings)),
         "findings": findings,
         "ignored_matches": ignored,
         "warnings": [
+            ("FSU findings are reassessed each scan; missing EPSS uses FSU for non-KEV findings."
+             if poc_kev_epss else
+             "Urgent quartile-policy findings block CI."),
             "CISA Vulnrichment ADP values are preferred; missing SSVC uses local defaults. Lookup failures require review.",
             "KEV=N is provisional based on absence from completed Grype DB enrichment; direct CISA catalog freshness is not separately verified.",
             "VEX ignore results must be reviewed for precise product/component scope before enforcement."
@@ -255,20 +297,24 @@ def markdown_report(report: dict) -> str:
               "- Exposure: `" + esc(report["exposure_input"]) + "` → PE=`"
                   + esc(report["publicly_exposed"]) + "` (`" + esc(report["exposure_source"]) + "`)",
               "- Admission: **" + esc(report["admission"]) + "**",
+              "- Provisional urgent findings (nonblocking): " + str(report["provisional_count"]),
+              "- Admission policy: `" + esc(report["admission_policy"]) + "`",
               "- Base model: `" + esc(report["model"]) + "`",
               "- EPSS amplifier: `" + esc(report["amplifier"]) + "`",
               "- VEX-suppressed findings: " + str(report["vex_ignored_count"]), ""]
-    lines += ["| CVE/advisory | Package | Severity | KEV | PE | Automatable | TI | SSVC lookup | EPSS bin | Base | Final | Decision rule |","|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines += ["| CVE/advisory | Package | Severity | KEV | PE | Automatable | TI | SSVC lookup | EPSS bin | Base | Final | Decision rule | Admission | Defaulted inputs | Admission reason |","|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for finding in report["findings"]:
         cells = [finding.get("cve") or finding.get("vulnerability_id"),
                  finding.get("package"), finding.get("severity"), finding.get("kev"),
                  finding.get("publicly_exposed"), finding.get("automatable"),
                  finding.get("technical_impact"), finding.get("vulnrichment_status"),
                  finding.get("epss_bin"), finding.get("base_outcome"),
-                 finding.get("final_outcome"), finding.get("rule")]
+                 finding.get("final_outcome"), finding.get("rule"),
+                 finding.get("admission"), ", ".join(finding.get("defaulted_inputs", [])),
+                 finding.get("admission_reason")]
         lines.append("| " + " | ".join(esc(c) for c in cells) + " |")
     if not report["findings"]:
-        lines.append("| No active findings | — | — | — | — | — | — | — | — | — | — | — |")
+        lines.append("| No active findings | — | — | — | — | — | — | — | — | — | — | — | — | — | — |")
     lines += ["","## VEX-suppressed findings","","VEX can change **applicability**, not the CVE severity. Only findings accepted by Grype's VEX matching are excluded from the active gate; the original records remain below.",""]
     if report["ignored_matches"]:
         lines += ["| Vulnerability | Package | Ignore evidence | Reason |","|---|---|---|---|"]
@@ -293,12 +339,15 @@ def main() -> None:
     p.add_argument("--vex", help="OpenVEX document for display-only suppression reasons")
     p.add_argument("--output", required=True)
     p.add_argument("--markdown", required=True)
+    p.add_argument("--poc-kev-epss", action=argparse.BooleanOptionalAction, default=False,
+                   help="Use the PoC KEV gate and EPSS probability targets")
     a = p.parse_args()
     base, amp, mapping = load_policy(Path(a.policy_dir))
     data = json.loads(Path(a.input).read_text(encoding="utf-8"))
     enrichment = json.loads(Path(a.vulnrichment).read_text(encoding="utf-8")) if a.vulnrichment else None
     vex = json.loads(Path(a.vex).read_text(encoding="utf-8")) if a.vex else None
-    report = evaluate(data, a.exposure, a.image, base, amp, mapping, enrichment, vex)
+    report = evaluate(data, a.exposure, a.image, base, amp, mapping, enrichment, vex,
+                      poc_kev_epss=a.poc_kev_epss)
     Path(a.output).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     Path(a.markdown).write_text(markdown_report(report), encoding="utf-8")
     print(report["admission"])
@@ -306,4 +355,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 

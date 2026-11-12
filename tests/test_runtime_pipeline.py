@@ -45,9 +45,9 @@ class RuntimePipelineTests(unittest.TestCase):
             self.assertEqual(results["excluded_by_reason"],
                              {"NO_EXACT_RUNTIME_MATCH": 1, "IMAGE_IDENTITY_INCOMPLETE": 1})
             rows = {r["observation_id"]: r for r in results["observations"]}
-            self.assertEqual(rows["synthetic-inspector-1"]["final_outcome"], "3D")
+            self.assertEqual(rows["synthetic-inspector-1"]["final_outcome"], "30D")
             self.assertEqual(rows["synthetic-inspector-2"]["platform"], "EKS")
-            self.assertEqual(rows["synthetic-inspector-2"]["decision_rule"], "KEV_GUARD")
+            self.assertEqual(rows["synthetic-inspector-2"]["decision_rule"], "POC_KEV_URGENT")
             self.assertEqual(rows["synthetic-defender-container-1"]["decision_status"],
                              "SUPPRESSED_BY_VEX")
             self.assertNotIn("synthetic-inspector-stale", rows)
@@ -57,3 +57,4 @@ class RuntimePipelineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
