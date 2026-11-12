@@ -112,3 +112,47 @@ claim of production readiness.
 - https://docs.aws.amazon.com/inspector/v2/APIReference/API_AwsEcrContainerImageDetails.html
 - https://docs.aws.amazon.com/inspector/latest/user/scanning-ecr.html
 - https://github.com/aws-actions/configure-aws-credentials
+
+## Offline debug: insert data instead of pulling from AWS
+
+From the repository root, use Python only — no AWS CLI, credentials, account
+variables, environment approval, or network access is needed for normalization:
+
+```bash
+python3 scripts/collect_inspector.py \
+  --input-file tests/fixtures/inspector-debug.json \
+  --output ./inspector-debug-report
+```
+
+Copy the fixture and edit the `findings` array to insert your own data. It uses
+Inspector's `list-findings` response shape: `{"findings": [...]}`. Saved
+`raw-findings.json` reports can also be replayed. Empty arrays are valid. Inputs
+with pagination tokens are rejected: combine all pages before replay.
+
+You can pipe JSON directly:
+
+```bash
+printf '%s' '{"findings": []}' | python3 scripts/collect_inspector.py \
+  --input-file - --output ./empty-debug-report
+```
+
+Optionally pass `--coverage-file coverage.json` with a `coveredResources` array.
+Without it, coverage is empty and `coverage_supplied` is false, not evidence of
+full scan coverage. Use a new output directory for each run. Malformed JSON or
+normalization failures exit nonzero and leave `collection_complete: false`.
+
+In GitHub Actions, choose **AWS Inspector collection → Run workflow → mode:
+debug**. Paste JSON into **findings_json**, or leave it blank to use the synthetic
+fixture. Debug uses a GitHub-hosted runner with contents-read permission only.
+Choose **aws** explicitly for the live collection path and its existing setup.
+The workflow must first exist on the default branch for manual dispatch to be
+available in GitHub; the local command works immediately on this feature branch.
+
+Artifacts are named `inspector-debug-*`. The manifest and normalized rows record
+`input_mode: offline`; the manifest has `live_aws_data: false`. The synthetic
+samples illustrate Critical/Medium/Low/Informational source severities and
+positive/zero/missing usage metadata. They do **not** simulate BOD outcomes:
+VEX, intelligence enrichment and decision evaluation remain pending.
+
+Avoid pasting confidential inventory into a public repository or public workflow
+run. Use local replay for sensitive real exports.

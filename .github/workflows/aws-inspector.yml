@@ -2,6 +2,16 @@ name: AWS Inspector collection
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Offline debug or live AWS collection'
+        type: choice
+        options: [debug, aws]
+        default: debug
+      findings_json:
+        description: 'Debug: paste Inspector JSON with a findings array; leave empty for sample data'
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -11,7 +21,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  debug:
+    if: ${{ inputs.mode == 'debug' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Normalize supplied data without AWS
+        env:
+          FINDINGS_JSON: ${{ inputs.findings_json }}
+          REPORT_DIR: ${{ runner.temp }}/inspector-debug-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$FINDINGS_JSON" ]]; then
+            printf '%s' "$FINDINGS_JSON" | python3 scripts/collect_inspector.py --input-file - --output "$REPORT_DIR"
+          else
+            python3 scripts/collect_inspector.py --input-file tests/fixtures/inspector-debug.json --output "$REPORT_DIR"
+          fi
+          echo 'Offline Inspector debug completed. No AWS calls. Policy evaluation remains pending.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve debug evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: inspector-debug-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/inspector-debug-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: warn
+          retention-days: 14
   collect:
+    if: ${{ inputs.mode == 'aws' }}
     # Set AWS_INSPECTOR_REGIONS to a JSON array, e.g. ["eu-north-1"].
     strategy:
       fail-fast: false

@@ -22,6 +22,43 @@ def finding():
 
 
 class CollectorTests(unittest.TestCase):
+    def test_offline_never_calls_aws_and_matches_normalization(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'findings.json'
+            source.write_text(json.dumps({'findings': [finding()]}))
+            out = Path(tmp) / 'report'
+            with patch.object(c, 'aws', side_effect=AssertionError('AWS must not run')), patch.object(c, 'pages', side_effect=AssertionError('API must not run')):
+                c.collect(None, out, source)
+            manifest = json.loads((out / 'manifest.json').read_text())
+            self.assertTrue(manifest['collection_complete'])
+            self.assertFalse(manifest['live_aws_data'])
+            self.assertFalse(manifest['coverage_supplied'])
+            rows = json.loads((out / 'normalized-findings.json').read_text())['findings']
+            self.assertEqual(rows[0].pop('input_mode'), 'offline')
+            self.assertEqual(rows, c.normalize([finding()]))
+
+    def test_offline_empty_findings_with_coverage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, coverage, out = (Path(tmp) / name for name in ['input.json', 'coverage.json', 'out'])
+            source.write_text('{"findings": []}')
+            coverage.write_text('{"coveredResources": [{"resourceId": "debug"}]}')
+            with patch.object(c, 'aws', side_effect=AssertionError('AWS must not run')):
+                c.collect(None, out, source, coverage)
+            manifest = json.loads((out / 'manifest.json').read_text())
+            self.assertEqual(manifest['normalized_count'], 0)
+            self.assertEqual(manifest['coverage_count'], 1)
+            self.assertTrue(manifest['coverage_supplied'])
+
+    def test_invalid_offline_input_fails_without_fallback(self):
+        for payload in ['broken json', '[]', '{}', '{"findings": [null]}', '{"findings": [], "nextToken": "more"}']:
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as tmp:
+                source, out = Path(tmp) / 'input.json', Path(tmp) / 'out'
+                source.write_text(payload)
+                with patch.object(c, 'aws', side_effect=AssertionError('AWS must not run')):
+                    with self.assertRaises(ValueError):
+                        c.collect(None, out, source)
+                self.assertFalse(json.loads((out / 'manifest.json').read_text())['collection_complete'])
+
     def test_pagination(self):
         with patch.object(c, 'aws', side_effect=[{'findings': [1], 'nextToken': 'next'}, {'findings': [2]}]) as api:
             self.assertEqual(c.pages('eu-north-1', 'list-findings', 'findings'), [1, 2])

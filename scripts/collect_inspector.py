@@ -103,21 +103,42 @@ def write_json(path, payload):
     path.write_text(json.dumps(payload, indent=2) + '\n')
 
 
-def collect(region, output):
+def load_input(path, key):
+    payload = json.loads(path.read_text())
+    if not isinstance(payload, dict) or not isinstance(payload.get(key), list):
+        raise ValueError(f'{path}: expected an object containing a {key} array')
+    if payload.get('nextToken') or payload.get('NextToken'):
+        raise ValueError(f'{path}: input is a partial page; combine all pages first')
+    if any(not isinstance(item, dict) for item in payload[key]):
+        raise ValueError(f'{path}: {key} entries must be objects')
+    return payload[key]
+
+
+def collect(region, output, input_file=None, coverage_file=None):
+    if coverage_file and not input_file:
+        raise ValueError('--coverage-file requires --input-file')
     output.mkdir(parents=True, exist_ok=False)
     manifest = {'schema_version': '0.1', 'region': region,
+                'input_mode': 'offline' if input_file else 'aws',
+                'live_aws_data': not bool(input_file),
+                'coverage_supplied': bool(coverage_file) if input_file else True,
                 'started_at': datetime.now(timezone.utc).isoformat(),
                 'collection_complete': False, 'policy_evaluated': False}
     write_json(output / 'manifest.json', manifest)
     try:
-        manifest['caller_account'] = aws(region, 'sts', 'get-caller-identity')['Account']
+        if not input_file:
+            manifest['caller_account'] = aws(region, 'sts', 'get-caller-identity')['Account']
         # Keep ACTIVE, SUPPRESSED and CLOSED observations. Provider suppression
         # is not project VEX, and provider closure is not verified remediation.
-        findings = pages(region, 'list-findings', 'findings')
+        findings = (load_input(input_file, 'findings') if input_file else
+                    pages(region, 'list-findings', 'findings'))
         write_json(output / 'raw-findings.json', {'findings': findings})
-        coverage = pages(region, 'list-coverage', 'coveredResources')
+        coverage = ((load_input(coverage_file, 'coveredResources') if coverage_file else [])
+                    if input_file else pages(region, 'list-coverage', 'coveredResources'))
         write_json(output / 'coverage.json', {'coveredResources': coverage})
         rows = normalize(findings)
+        for row in rows:
+            row['input_mode'] = manifest['input_mode']
         write_json(output / 'normalized-findings.json', {'findings': rows})
         manifest.update(collection_complete=True, raw_count=len(findings),
                         normalized_count=len(rows), coverage_count=len(coverage))
@@ -128,7 +149,22 @@ def collect(region, output):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--region', required=True)
+    parser.add_argument('--region', help='Required for live collection; optional metadata for offline input')
+    parser.add_argument('--input-file', type=Path, help='Offline Inspector JSON containing a findings array; use - for stdin')
+    parser.add_argument('--coverage-file', type=Path, help='Optional offline JSON containing coveredResources')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    collect(args.region, args.output)
+    if not args.input_file and not args.region:
+        parser.error('--region is required for live AWS collection')
+    if args.coverage_file and not args.input_file:
+        parser.error('--coverage-file requires --input-file')
+    if args.input_file == Path('-'):
+        # Use a temporary file so stdin and file inputs follow identical validation.
+        import sys
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'input.json'
+            path.write_text(sys.stdin.read())
+            collect(args.region, args.output, path, args.coverage_file)
+    else:
+        collect(args.region, args.output, args.input_file, args.coverage_file)
