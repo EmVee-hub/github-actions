@@ -284,6 +284,9 @@ def markdown_report(report: dict) -> str:
         "| Provider | Workload | CVE | Severity | Correlation | VEX | KEV | PE | EPSS bin | Base | Final | Status / reason |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
+    active = [r for r in report["observations"] if r.get("decision_status") == "EVALUATED" and r.get("vex_status") == "ACTIVE"]
+    urgent = sum(r.get("final_outcome") in ("3D", "3DF") for r in active)
+    lines[6:6] = [f"**Active evaluated findings: {len(active)}; urgent (3D/3DF): {urgent}. A successful job is not a clean security verdict.**", ""]
     for item in report["observations"]:
         def e(x):
             return str(x if x is not None else "—").replace("|", "\\|").replace("\n", " ")
@@ -370,4 +373,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 

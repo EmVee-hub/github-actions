@@ -1,5 +1,6 @@
 {
   "payments": "payments.openvex.json",
   "billing": "billing.openvex.json",
-  "tools": "tools.openvex.json"
+  "tools": "tools.openvex.json",
+  "customer-api": "customer-api.openvex.json"
 }

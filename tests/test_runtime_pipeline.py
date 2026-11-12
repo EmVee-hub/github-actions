@@ -39,8 +39,8 @@ class RuntimePipelineTests(unittest.TestCase):
                 "--output", dest / "results.json", "--markdown", dest / "report.md")
             results = json.loads((dest / "results.json").read_text())
             self.assertEqual(results["inventory_modes"], ["OFFLINE"])
-            self.assertEqual(results["runtime_workloads_observed"], 3)  # two EKS Pods and one AKS Pod
-            self.assertEqual(results["counts"], {"EVALUATED": 2, "SUPPRESSED_BY_VEX": 1})
+            self.assertEqual(results["runtime_workloads_observed"], 4)  # two EKS Pods and two AKS Pods
+            self.assertEqual(results["counts"], {"EVALUATED": 3, "SUPPRESSED_BY_VEX": 1})
             self.assertEqual(results["excluded_uncorrelated_observations"], 2)
             self.assertEqual(results["excluded_by_reason"],
                              {"NO_EXACT_RUNTIME_MATCH": 1, "IMAGE_IDENTITY_INCOMPLETE": 1})
@@ -52,6 +52,10 @@ class RuntimePipelineTests(unittest.TestCase):
             self.assertEqual(rows["synthetic-inspector-2"]["final_outcome"], "14D")
             self.assertEqual(rows["synthetic-defender-container-1"]["decision_status"],
                              "SUPPRESSED_BY_VEX")
+            self.assertEqual(rows["synthetic-defender-active"]["decision_status"], "EVALUATED")
+            self.assertEqual(rows["synthetic-defender-active"]["vex_status"], "ACTIVE")
+            self.assertEqual(rows["synthetic-defender-active"]["final_outcome"], "3DF")
+            self.assertEqual(rows["synthetic-inspector-1"]["vex_status"], "ACTIVE")
             self.assertNotIn("synthetic-inspector-stale", rows)
             self.assertNotIn("synthetic-defender-unknown-identity", rows)
             self.assertIn("Running container vulnerability assessment", (dest / "report.md").read_text())
@@ -59,4 +63,5 @@ class RuntimePipelineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
