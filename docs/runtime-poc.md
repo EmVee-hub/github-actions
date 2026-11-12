@@ -78,7 +78,7 @@ python3 scripts/runtime_assess.py \
 ~~~
 
 Expected: 2 EKS Pod findings evaluated (with a BOD 3D amplified outcome
-and a KEV-protected 3DF outcome) and 1 synthetic AKS VEX
+and a KEV-protected 14D outcome) and 1 synthetic AKS VEX
 suppression. An unmatched ECR image and a Defender record with missing digest
 are counted as **excluded** rather than shown as running-container CVEs.
 The manual GitHub workflow `.github/workflows/poc-showcase.yml` (scenario: `runtime` or `all`) replays the same synthetic integration.
