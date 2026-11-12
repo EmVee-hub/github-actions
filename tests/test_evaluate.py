@@ -79,6 +79,24 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(result["admission"], "REVIEW_REQUIRED")
         self.assertEqual(result["findings"][0]["status"], "INCOMPLETE")
 
+    def test_missing_exposure_defaults_to_public_and_is_auditable(self):
+        data = {"matches": [{"vulnerability": {"id": "CVE-2026-99999", "cvss": []},
+                             "artifact": {"name": "nginx-demo", "version": "1.0"}}]}
+        absent = ev.evaluate(data, "unknown", "cae-live:ci", BASE, AMP, MAPPING)
+        explicit = ev.evaluate(data, "public", "cae-live:ci", BASE, AMP, MAPPING)
+        self.assertEqual(absent["exposure_input"], "unknown")
+        self.assertEqual(absent["publicly_exposed"], "Y")
+        self.assertEqual(absent["exposure_source"], "UNKNOWN_DEFAULT_PUBLIC")
+        self.assertEqual(explicit["exposure_input"], "public")
+        self.assertEqual(explicit["publicly_exposed"], "Y")
+        self.assertEqual(explicit["exposure_source"], "PROJECT_DECLARATION")
+        for report in (absent, explicit):
+            self.assertEqual(report["findings"][0]["publicly_exposed"], "Y")
+            self.assertEqual(report["admission"], "BLOCK")
+        self.assertEqual(absent["counts"], explicit["counts"])
+        self.assertIn("UNKNOWN_DEFAULT_PUBLIC", ev.markdown_report(absent))
+        self.assertIn("PROJECT_DECLARATION", ev.markdown_report(explicit))
+
     def test_bad_report_fails_closed(self):
         with self.assertRaises(ValueError):
             ev.evaluate({}, "unknown", "test", BASE, AMP, MAPPING)

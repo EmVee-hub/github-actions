@@ -190,6 +190,10 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
         "REVIEW_REQUIRED" if counts["INCOMPLETE"] else "ALLOW")
     return {
         "image": image,
+        "exposure_input": exposure,
+        "publicly_exposed": "N" if exposure == "internal" else "Y",
+        "exposure_source": ("PROJECT_DECLARATION" if exposure in ("public", "internal")
+                            else "UNKNOWN_DEFAULT_PUBLIC"),
         "assessed_at": datetime.now(timezone.utc).isoformat(),
         "model": base["id"],
         "amplifier": amp["id"],
@@ -212,6 +216,8 @@ def markdown_report(report: dict) -> str:
     lines = ["# CI Vulnerability Assessment", ""]
     lines += ["## Scan results", "",
               "- Image: `" + esc(report["image"]) + "`",
+              "- Exposure: `" + esc(report["exposure_input"]) + "` → PE=`"
+                  + esc(report["publicly_exposed"]) + "` (`" + esc(report["exposure_source"]) + "`)",
               "- Admission: **" + esc(report["admission"]) + "**",
               "- Base model: `" + esc(report["model"]) + "`",
               "- EPSS amplifier: `" + esc(report["amplifier"]) + "`",
