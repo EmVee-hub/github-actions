@@ -3,3 +3,4 @@ securityresources
 | where properties.metadata.recommendationCategory in ('SoftwareUpdate', 'ServiceUpgrade')
 | project id, name, subscriptionId, resourceGroup, properties
 | order by id asc
+

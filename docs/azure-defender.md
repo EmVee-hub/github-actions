@@ -103,7 +103,7 @@ local commands above; committing on the feature branch does not enable that UI y
 This debug path tests parsing/normalization, not VEX matching or BOD/EPSS decisions.
 
 ```bash
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -p 'test_read_azure.py' -v
 # After az login, using a NEW output directory:
 export AZURE_SUBSCRIPTION_IDS='["YOUR-SUBSCRIPTION-UUID"]'
 python3 scripts/read_azure.py --out output
@@ -119,3 +119,4 @@ Tests cover continuation tokens, truncation, duplicate pages, subscription bound
 - [Resource Graph permissions and partial visibility](https://learn.microsoft.com/en-us/azure/governance/resource-graph/overview)
 - [Defender container scanning prerequisites and limitations](https://learn.microsoft.com/en-us/azure/defender-for-cloud/agentless-vulnerability-assessment-azure)
 - [Azure Login OIDC configuration](https://github.com/Azure/login)
+

@@ -1,0 +1,40 @@
+name: Defender CI
+
+on:
+  push:
+    branches: [main, 'feature/**', 'feat/**']
+    paths:
+      - 'scripts/read_azure.py'
+      - 'queries/**'
+      - 'tests/test_read_azure.py'
+      - 'tests/fixtures/defender-*.json'
+      - 'docs/azure-defender.md'
+      - '.github/workflows/defender-cloud.yml'
+      - '.github/workflows/defender-debug.yml'
+      - '.github/workflows/ci-defender.yml'
+  pull_request:
+    paths:
+      - 'scripts/read_azure.py'
+      - 'queries/**'
+      - 'tests/test_read_azure.py'
+      - 'tests/fixtures/defender-*.json'
+      - 'docs/azure-defender.md'
+      - '.github/workflows/defender-cloud.yml'
+      - '.github/workflows/defender-debug.yml'
+      - '.github/workflows/ci-defender.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Defender CI tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run defender tests without cloud credentials
+        run: python3 -m unittest discover -s tests -p 'test_read_azure.py' -v

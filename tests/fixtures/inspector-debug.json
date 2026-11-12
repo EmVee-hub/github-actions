@@ -1,0 +1,144 @@
+{
+  "_note": "Synthetic normalization examples, not actual vulnerability intelligence or decision outcomes.",
+  "findings": [
+    {
+      "findingArn": "arn:aws:inspector2:eu-north-1:000000000000:finding/debug-1",
+      "awsAccountId": "000000000000",
+      "type": "PACKAGE_VULNERABILITY",
+      "status": "ACTIVE",
+      "severity": "CRITICAL",
+      "packageVulnerabilityDetails": {
+        "vulnerabilityId": "DEBUG-VULN-001",
+        "vulnerablePackages": [
+          {
+            "name": "demo-package-1",
+            "version": "1.0.0",
+            "fixedInVersion": "1.0.1",
+            "packageManager": "OS",
+            "filePath": "/debug/package-1"
+          }
+        ]
+      },
+      "resources": [
+        {
+          "type": "AWS_ECR_CONTAINER_IMAGE",
+          "id": "debug-image-1",
+          "region": "eu-north-1",
+          "details": {
+            "awsEcrContainerImage": {
+              "imageHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "registry": "000000000000",
+              "repositoryName": "debug/example",
+              "architecture": "amd64",
+              "inUseCount": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "findingArn": "arn:aws:inspector2:eu-north-1:000000000000:finding/debug-2",
+      "awsAccountId": "000000000000",
+      "type": "PACKAGE_VULNERABILITY",
+      "status": "ACTIVE",
+      "severity": "MEDIUM",
+      "packageVulnerabilityDetails": {
+        "vulnerabilityId": "DEBUG-VULN-002",
+        "vulnerablePackages": [
+          {
+            "name": "demo-package-2",
+            "version": "1.0.0",
+            "fixedInVersion": "1.0.1",
+            "packageManager": "OS",
+            "filePath": "/debug/package-2"
+          }
+        ]
+      },
+      "resources": [
+        {
+          "type": "AWS_ECR_CONTAINER_IMAGE",
+          "id": "debug-image-2",
+          "region": "eu-north-1",
+          "details": {
+            "awsEcrContainerImage": {
+              "imageHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+              "registry": "000000000000",
+              "repositoryName": "debug/example",
+              "architecture": "amd64",
+              "inUseCount": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "findingArn": "arn:aws:inspector2:eu-north-1:000000000000:finding/debug-3",
+      "awsAccountId": "000000000000",
+      "type": "PACKAGE_VULNERABILITY",
+      "status": "ACTIVE",
+      "severity": "LOW",
+      "packageVulnerabilityDetails": {
+        "vulnerabilityId": "DEBUG-VULN-003",
+        "vulnerablePackages": [
+          {
+            "name": "demo-package-3",
+            "version": "1.0.0",
+            "fixedInVersion": "1.0.1",
+            "packageManager": "OS",
+            "filePath": "/debug/package-3"
+          }
+        ]
+      },
+      "resources": [
+        {
+          "type": "AWS_ECR_CONTAINER_IMAGE",
+          "id": "debug-image-3",
+          "region": "eu-north-1",
+          "details": {
+            "awsEcrContainerImage": {
+              "imageHash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+              "registry": "000000000000",
+              "repositoryName": "debug/example",
+              "architecture": "amd64",
+              "inUseCount": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "findingArn": "arn:aws:inspector2:eu-north-1:000000000000:finding/debug-4",
+      "awsAccountId": "000000000000",
+      "type": "PACKAGE_VULNERABILITY",
+      "status": "ACTIVE",
+      "severity": "INFORMATIONAL",
+      "packageVulnerabilityDetails": {
+        "vulnerabilityId": "DEBUG-VULN-004",
+        "vulnerablePackages": [
+          {
+            "name": "demo-package-4",
+            "version": "1.0.0",
+            "fixedInVersion": "1.0.1",
+            "packageManager": "OS",
+            "filePath": "/debug/package-4"
+          }
+        ]
+      },
+      "resources": [
+        {
+          "type": "AWS_ECR_CONTAINER_IMAGE",
+          "id": "debug-image-4",
+          "region": "eu-north-1",
+          "details": {
+            "awsEcrContainerImage": {
+              "imageHash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+              "registry": "000000000000",
+              "repositoryName": "debug/example",
+              "architecture": "amd64"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

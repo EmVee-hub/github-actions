@@ -29,7 +29,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Test collector
-        run: python3 -m unittest discover -s tests -v
+        run: python3 -m unittest discover -s tests -p 'test_read_azure.py' -v
       - uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -59,3 +59,4 @@ jobs:
           if path.exists():
               shutil.rmtree(path)
           PYTHON
+

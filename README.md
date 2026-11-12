@@ -1,14 +1,7 @@
 # github-actions — Grype / OpenVEX / BOD+EPSS CI starter
 
 This repository contains the **CI security action**, the versioned decision policy,
-unit tests, and an Azure Defender evidence-collection MVP.
-
-## Azure Defender collector
-
-See [Azure setup and limitations](docs/azure-defender.md) for the scheduled/manual
-OIDC workflow, subscription configuration, and output contract. This first slice
-collects individual assessments; runtime correlation, OpenVEX matching, and policy
-evaluation remain unimplemented for Azure. It does not issue an admission verdict.
+and Azure Defender / AWS Inspector evidence-collection MVPs with independent tests.
 
 ## Action: `actions/grype-policy-scan`
 
@@ -91,3 +84,36 @@ Upstream references:
 - [Grype JSON schema and formats](https://oss.anchore.com/docs/reference/grype/json/)
 - [GitHub composite actions](https://docs.github.com/en/actions/tutorials/create-actions/create-a-composite-action)
 
+## AWS Inspector runtime collection
+
+The initial AWS collector uses OIDC to read Inspector findings and scan coverage
+across configured Regions, preserves raw evidence, and normalizes ECR/EC2 package
+observations. See [AWS setup and limitations](docs/aws-inspector.md).
+
+This collection workflow does not yet apply project VEX or the decision policy.
+A successful collection is not a deployment admission decision.
+
+
+## Azure Defender runtime collection
+
+See [Azure setup and offline debug](docs/azure-defender.md). The collector retains
+individual assessments and provisional CVE observations. Runtime correlation, VEX
+matching and policy evaluation remain pending for Azure.
+
+## Independent CI workflows
+
+| Workflow | Tests | Triggered by |
+|---|---|---|
+| `ci-defender.yml` — Defender CI | `test_read_azure.py` | Defender collector, query, fixtures, docs and workflows |
+| `ci-aws.yml` — AWS CI | `test_inspector.py` | Inspector collector, IAM, fixtures, docs and workflows |
+| `ci-policy.yml` — Policy CI | `test_evaluate.py` | Shared policy, Grype action, evaluator and fixtures |
+
+Each workflow supports manual dispatch and uses path filters for pushes and pull
+requests. A provider-only change does not trigger the other provider's CI. None
+of these CI workflows logs in to a cloud or collects live findings. The runtime
+collection workflows also run only their respective provider tests.
+
+The old `test.yml` workflow is replaced. If branch protection requires its old
+check, update that configuration before merging. Path-filtered workflows should
+not be unconditional required checks: a skipped workflow may leave such a check
+pending. No branch-protection settings are changed here.
