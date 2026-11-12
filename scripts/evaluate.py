@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Small Grype JSON -> BOD 26-04 -> local EPSS amplifier evaluator.
+"""Grype JSON + CISA Vulnrichment -> BOD 26-04 -> EPSS evaluator.
 
-No network calls, no dependencies beyond Python 3.10+. This does not fetch
-CISA Vulnrichment or validate that an image is actually deployed.
+The network lookup is kept separate so this evaluator remains deterministic.
 """
 from __future__ import annotations
 
@@ -112,16 +111,34 @@ def technical_impact(match: dict) -> tuple[str, str]:
     return "T", "LOCAL_CONSERVATIVE_DEFAULT"
 
 
-def make_decision(match: dict, exposure: str, mapping: dict, amp: dict) -> dict:
+def cisa_values(cve: str | None, enrichment: dict | None) -> dict:
+    if not cve:
+        return {"status": "NO_CVE"}
+    if enrichment is None:
+        return {"status": "NOT_QUERIED"}
+    return (enrichment.get("cves") or {}).get(cve, {
+        "status": "FETCH_ERROR", "reason": "CVE missing from enrichment batch"
+    })
+
+
+def make_decision(match: dict, exposure: str, mapping: dict, amp: dict,
+                  enrichment: dict | None = None) -> dict:
     vuln = match.get("vulnerability") or {}
     artifact = match.get("artifact") or {}
     kev, kev_source = kev_status(match)
     percentile, probability, epss_date = epss_percentile(match)
     ti, ti_source = technical_impact(match)
+    cve = select_cve(match)
+    cisa = cisa_values(cve, enrichment)
+    cisa_status = cisa.get("status")
+    automatable, automatable_source = "Y", "SSVC_DEFAULT_MISSING_VULNRICHMENT"
+    if cisa_status == "FOUND":
+        automatable, automatable_source = cisa["automatable"], "CISA_VULNRICHMENT_ADP"
+        ti, ti_source = cisa["technical_impact"], "CISA_VULNRICHMENT_ADP"
     pe = "N" if exposure == "internal" else "Y"
     row = {
         "vulnerability_id": vuln.get("id"),
-        "cve": select_cve(match),
+        "cve": cve,
         "package": artifact.get("name"),
         "installed_version": artifact.get("version"),
         "severity": vuln.get("severity"),
@@ -129,8 +146,13 @@ def make_decision(match: dict, exposure: str, mapping: dict, amp: dict) -> dict:
         "kev_source": kev_source,
         "publicly_exposed": pe,
         "exposure_source": "PROJECT_DECLARATION" if exposure in ("public", "internal") else "UNKNOWN_DEFAULT_PUBLIC",
-        "automatable": "Y",
-        "automatable_source": "SSVC_DEFAULT_NOT_VULNRICHMENT",
+        "automatable": automatable,
+        "automatable_source": automatable_source,
+        "vulnrichment_status": cisa_status,
+        "vulnrichment_version": cisa.get("ssvc_version"),
+        "vulnrichment_timestamp": cisa.get("ssvc_timestamp"),
+        "vulnrichment_source_url": cisa.get("url"),
+        "vulnrichment_error": cisa.get("reason") if cisa_status in ("FETCH_ERROR", "INVALID_SSVC") else None,
         "technical_impact": ti,
         "technical_impact_source": ti_source,
         "epss_percentile": percentile,
@@ -138,23 +160,25 @@ def make_decision(match: dict, exposure: str, mapping: dict, amp: dict) -> dict:
         "epss_date": epss_date,
         "epss_source": "GRYPE_DATABASE" if percentile is not None else "UNAVAILABLE_NEUTRAL_Q2"
     }
-    if kev == "UNKNOWN":
+    if kev == "UNKNOWN" or cisa_status in ("FETCH_ERROR", "INVALID_SSVC"):
+        reason = "KEV_UNKNOWN" if kev == "UNKNOWN" else "VULNRICHMENT_LOOKUP_FAILED"
         row.update({"base_outcome": None, "final_outcome": None,
-                    "epss_bin": epss_bin(percentile), "rule": "KEV_UNKNOWN", "status": "INCOMPLETE"})
+                    "epss_bin": epss_bin(percentile), "rule": reason, "status": "INCOMPLETE"})
         return row
-    base = mapping[(kev, pe, "Y", ti)]
+    base = mapping[(kev, pe, automatable, ti)]
     final, bin_name, rule = apply_amp(base, kev, percentile, amp)
     row.update({"base_outcome": base, "final_outcome": final,
                 "epss_bin": bin_name, "rule": rule, "status": "EVALUATED"})
     return row
 
 
-def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict, mapping: dict) -> dict:
+def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
+             mapping: dict, enrichment: dict | None = None) -> dict:
     if not isinstance(data, dict) or not isinstance(data.get("matches"), list):
         raise ValueError("Invalid Grype report: expected 'matches' array")
     if exposure not in ("public", "internal", "unknown"):
         raise ValueError(f"Invalid exposure: {exposure}")
-    findings = [make_decision(m, exposure, mapping, amp) for m in data["matches"]]
+    findings = [make_decision(m, exposure, mapping, amp, enrichment) for m in data["matches"]]
     ignored = []
     for match in (data.get("ignoredMatches") or []):
         v = match.get("vulnerability") or {}
@@ -172,10 +196,11 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict, mappi
         "admission": decision,
         "counts": dict(counts),
         "vex_ignored_count": len(ignored),
+        "vulnrichment_counts": dict(Counter(f["vulnrichment_status"] for f in findings)),
         "findings": findings,
         "ignored_matches": ignored,
         "warnings": [
-            "Vulnrichment values are not fetched: Automatable uses Y default; TI uses local CVSS3 heuristic/default.",
+            "CISA Vulnrichment ADP values are preferred; missing SSVC uses local defaults. Lookup failures require review.",
             "KEV=N is provisional based on absence from completed Grype DB enrichment; direct CISA catalog freshness is not separately verified.",
             "VEX ignore results must be reviewed for precise product/component scope before enforcement."
         ]
@@ -190,11 +215,12 @@ def markdown_report(report: dict) -> str:
              f"- Base: `{report['model']}`",
              f"- EPSS amplifier: `{report['amplifier']}`",
              f"- VEX-suppressed findings: {report['vex_ignored_count']}", "",
-             "| CVE/advisory | Package | KEV | TI | EPSS bin | Base | Final | Source / guard |",
-             "|---|---|---|---|---|---|---|---|"]
+             "| CVE/advisory | Package | KEV | Automatable | TI | SSVC lookup | EPSS bin | Base | Final | Source / guard |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
     for finding in report["findings"]:
         cells = [finding.get("cve") or finding.get("vulnerability_id"), finding.get("package"),
-                 finding.get("kev"), finding.get("technical_impact"), finding.get("epss_bin"),
+                 finding.get("kev"), finding.get("automatable"), finding.get("technical_impact"),
+                 finding.get("vulnrichment_status"), finding.get("epss_bin"),
                  finding.get("base_outcome"), finding.get("final_outcome"), finding.get("rule")]
         lines.append("| " + " | ".join(esc(c) for c in cells) + " |")
     lines += ["", "## Known MVP limits", ""] + [f"- {w}" for w in report["warnings"]]
@@ -206,13 +232,15 @@ def main() -> None:
     p.add_argument("--input", required=True)
     p.add_argument("--policy-dir", required=True)
     p.add_argument("--image", required=True)
+    p.add_argument("--vulnrichment", help="CVE Services CISA-ADP lookup JSON from fetch_vulnrichment.py")
     p.add_argument("--exposure", choices=("public", "internal", "unknown"), default="unknown")
     p.add_argument("--output", required=True)
     p.add_argument("--markdown", required=True)
     a = p.parse_args()
     base, amp, mapping = load_policy(Path(a.policy_dir))
     data = json.loads(Path(a.input).read_text(encoding="utf-8"))
-    report = evaluate(data, a.exposure, a.image, base, amp, mapping)
+    enrichment = json.loads(Path(a.vulnrichment).read_text(encoding="utf-8")) if a.vulnrichment else None
+    report = evaluate(data, a.exposure, a.image, base, amp, mapping, enrichment)
     Path(a.output).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     Path(a.markdown).write_text(markdown_report(report), encoding="utf-8")
     print(report["admission"])
