@@ -1,0 +1,87 @@
+[
+  {
+    "id": "synthetic-defender-container-1",
+    "subscriptionId": "11111111-1111-1111-1111-111111111111",
+    "properties": {
+      "status": {
+        "code": "Unhealthy"
+      },
+      "metadata": {
+        "severity": "Critical"
+      },
+      "resourceDetails": {
+        "ResourceType": "container-image"
+      },
+      "additionalData": {
+        "CvesDetails": [
+          {
+            "CveId": "CVE-2021-44228"
+          }
+        ],
+        "DetectedSoftwareVersions": [
+          "2.14.1"
+        ]
+      }
+    }
+  },
+  {
+    "id": "synthetic-defender-unknown-identity",
+    "subscriptionId": "11111111-1111-1111-1111-111111111111",
+    "properties": {
+      "status": {
+        "code": "Unhealthy"
+      },
+      "metadata": {
+        "severity": "High"
+      },
+      "resourceDetails": {
+        "ResourceType": "container-image"
+      },
+      "additionalData": {
+        "CvesDetails": [
+          {
+            "CveId": "CVE-2021-44228"
+          }
+        ],
+        "DetectedSoftwareVersions": [
+          "2.14.1"
+        ]
+      }
+    }
+  },
+  {
+    "id": "synthetic-defender-active",
+    "subscriptionId": "11111111-1111-1111-1111-111111111111",
+    "properties": {
+      "status": {
+        "code": "Unhealthy"
+      },
+      "metadata": {
+        "severity": "Critical"
+      },
+      "resourceDetails": {
+        "ResourceType": "container-image"
+      },
+      "additionalData": {
+        "CvesDetails": [
+          {
+            "CveId": "CVE-2021-44228"
+          }
+        ],
+        "DetectedSoftwareVersions": [
+          "2.14.1"
+        ]
+      }
+    }
+  },
+  {
+    "id": "synthetic-missing-cve",
+    "subscriptionId": "11111111-1111-1111-1111-111111111111",
+    "properties": {
+      "resourceDetails": {
+        "ResourceType": "container-image"
+      },
+      "additionalData": {}
+    }
+  }
+]

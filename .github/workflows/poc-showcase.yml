@@ -25,96 +25,31 @@ jobs:
           persist-credentials: false
       - name: Explain the demonstration before assessment jobs
         run: |
-          echo '::notice title=How to read this run::Synthetic data only. All runs three independent demos, not a connected cloud pipeline. Read the Start here summary for columns, VEX suppression and exclusions.'
+          echo '::notice title=How to read this run::Synthetic data only. Raw provider fixtures flow through normalization, explicit fixture identity mapping, Pod matching, VEX and policy. Read the guide for remaining live integration gaps.'
           cat docs/showcase-guide.md >> "$GITHUB_STEP_SUMMARY"
 
-  replay:
+  showcase:
+    name: Connected AWS and Azure assessment (synthetic)
     needs: [guide]
-    name: AKS/EKS Pod correlation + BOD/EPSS (synthetic)
-    if: ${{ inputs.scenario == 'all' || inputs.scenario == 'runtime' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Build synthetic runtime inventory and evaluate
-        shell: bash
+      - name: Normalize providers, map fixture identities, correlate Pods and evaluate policy
+        env:
+          SCENARIO: ${{ inputs.scenario }}
         run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/runtime-demo"
-          FIX=tests/fixtures/runtime
-          OUT="$RUNNER_TEMP/runtime-demo"
-          python3 scripts/runtime_workloads.py --platform EKS --cluster eks-demo --account-id 123456789012 --region eu-north-1 --input "$FIX/eks-pods.json" --output "$OUT/eks.json"
-          python3 scripts/runtime_workloads.py --platform AKS --cluster aks-demo --subscription-id 11111111-1111-1111-1111-111111111111 --input "$FIX/aks-pods.json" --output "$OUT/aks.json"
-          python3 scripts/runtime_assess.py --inspector "$FIX/inspector-normalized.json" --defender "$FIX/defender-observations.json" \
-            --inventory "$OUT/eks.json" "$OUT/aks.json" \
-            --intel "$FIX/intelligence.json" --vex-map "$FIX/vex-map.json" \
-            --output "$OUT/decisions.json" --markdown "$OUT/report.md"
-          echo '::warning title=Synthetic active security findings::This fixture includes an active AWS 3D finding and an active Azure 3DF finding. Passing the demo means the expected issues were detected; it does not mean the images are safe.'
-          cat "$OUT/report.md" >> "$GITHUB_STEP_SUMMARY"
-          echo '**SYNTHETIC fixture only — does not prove live cloud coverage.**' >> "$GITHUB_STEP_SUMMARY"
-      - name: Regression tests
-        run: python3 -m unittest discover -s tests -p 'test_runtime_*.py' -v
-      - name: Upload synthetic comparison evidence
+          python3 scripts/cloud_showcase.py --scenario "$SCENARIO" --output "$RUNNER_TEMP/cloud-showcase"
+          cat "$RUNNER_TEMP/cloud-showcase/report.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify connected cloud scenarios
+        run: python3 -m unittest discover -s tests -p 'test_cloud_showcase.py' -v
+      - name: Upload source, normalization, mapping and decision evidence
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: runtime-bod-epss-synthetic
-          path: ${{ runner.temp }}/runtime-demo/
-          retention-days: 7
-
-  inspector:
-    needs: [guide]
-    name: AWS Inspector container findings (synthetic)
-    if: ${{ inputs.scenario == 'all' || inputs.scenario == 'inspector' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - name: Normalize synthetic ECR container-image findings
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/collect_inspector.py \
-            --input-file tests/fixtures/inspector-debug.json \
-            --output "$RUNNER_TEMP/poc-inspector"
-          echo '::warning title=Inspector synthetic security findings::The fixture contains ACTIVE package vulnerabilities. Normalization success is not a clean security verdict; see the findings table.'
-          python3 scripts/provider_summary.py --provider inspector --directory "$RUNNER_TEMP/poc-inspector" >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload synthetic Inspector normalization
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: poc-inspector-synthetic
-          path: ${{ runner.temp }}/poc-inspector/
+          name: connected-cloud-showcase
+          path: ${{ runner.temp }}/cloud-showcase/
           if-no-files-found: error
           retention-days: 7
-
-  defender:
-    needs: [guide]
-    name: Azure Defender container findings (synthetic)
-    if: ${{ inputs.scenario == 'all' || inputs.scenario == 'defender' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - name: Normalize synthetic AKS container-image assessments
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/read_azure.py \
-            --input tests/fixtures/defender-sample.json \
-            --out "$RUNNER_TEMP/poc-defender"
-          echo '::warning title=Defender synthetic security findings::The fixture contains an Unhealthy CVE observation as well as an unresolved assessment. Missing image identity prevents prioritization, not detection.'
-          python3 scripts/provider_summary.py --provider defender --directory "$RUNNER_TEMP/poc-defender" >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload synthetic Defender normalization
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: poc-defender-synthetic
-          path: ${{ runner.temp }}/poc-defender/
-          if-no-files-found: error
-          retention-days: 7
-
-
