@@ -113,7 +113,7 @@ package mapping require sanitized provider evidence.**
 ## AWS Inspector runtime collection
 
 The initial AWS collector uses OIDC to read Inspector findings and scan coverage
-across configured Regions, preserves raw evidence, and normalizes ECR/EC2 package
+across configured Regions, filters to ECR container images, and normalizes package
 observations. See [AWS setup and limitations](docs/aws-inspector.md).
 
 This collection workflow does not yet apply project VEX or the decision policy.

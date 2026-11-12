@@ -52,7 +52,7 @@ class RuntimePipelineTests(unittest.TestCase):
                              "SUPPRESSED_BY_VEX")
             self.assertNotIn("synthetic-inspector-stale", rows)
             self.assertNotIn("synthetic-defender-unknown-identity", rows)
-            self.assertIn("Runtime vulnerability correlation", (dest / "report.md").read_text())
+            self.assertIn("Running container vulnerability assessment", (dest / "report.md").read_text())
 
 
 if __name__ == "__main__":

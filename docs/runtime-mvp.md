@@ -4,6 +4,15 @@
 AKS/EKS/ECS integration passed CI, but **real customer-cloud runtime coverage has
 not yet been validated**. This is an MVP candidate rather than production sign-off.
 
+## Container-only scope
+
+**Only running containers count: AKS/EKS Pods and ECS task containers.**
+EC2 hosts, VM/node OS, Lambda, unrelated services and non-running ECR/ACR
+images are outside the runtime security program. Registry image vulnerability
+data is only source evidence after an exact match to a running container.
+Unmatched provider observations are excluded from the active finding table,
+but an exclusion count is retained to avoid treating missing evidence as safe.
+
 ## End-to-end flow
 
 1. The existing Azure Defender and AWS Inspector collectors preserve raw
@@ -24,7 +33,9 @@ not yet been validated**. This is an MVP candidate rather than production sign-o
 7. Emit JSON and Markdown with the provider, workload, project, source
    evidence, VEX status, base/final deadline and explicit evaluation state.
 
-**States:** EVALUATED, SUPPRESSED_BY_VEX, REVIEW_REQUIRED, or NOT_EVALUATED.
+**States for confirmed running containers:** EVALUATED, SUPPRESSED_BY_VEX
+or REVIEW_REQUIRED. Unmatched registry/unknown-digest observations are excluded
+from the active runtime findings, with exclusion counts kept separately.
 Preliminary BOD priorities can be shown under REVIEW_REQUIRED, but these are
 not accepted remediation dispositions. A VEX statement is not trusted merely
 because it passes syntax and scope checks. Real suppression needs approval
@@ -67,9 +78,9 @@ python3 scripts/runtime_assess.py \
   --markdown /tmp/runtime-demo/assessment.md
 ~~~
 
-Expected: 2 EKS/ECS evaluated runtime findings, 1 synthetic AKS VEX
-suppression, 1 ECR digest with no running workload match, and 1 Defender
-observation lacking digest identity. Those last two remain NOT_EVALUATED.
+Expected: 2 EKS/ECS evaluated runtime findings and 1 synthetic AKS VEX
+suppression. An unmatched ECR image and a Defender record with missing digest
+are counted as **excluded** rather than shown as running-container CVEs.
 The GitHub workflow runtime-demo.yml runs the same integration.
 
 ## Private GitHub Actions pilot template
