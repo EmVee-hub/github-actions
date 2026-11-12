@@ -21,10 +21,11 @@ jobs:
       contents: read
       id-token: write
     env:
-      DEFENDER_OUTPUT: ${{ runner.temp }}/defender-${{ github.run_id }}-${{ github.run_attempt }}
       AZURE_CORE_OUTPUT: none
       AZURE_SUBSCRIPTION_IDS: ${{ vars.AZURE_SUBSCRIPTION_IDS }}
     steps:
+      - name: Set evidence directory
+        run: echo "DEFENDER_OUTPUT=$RUNNER_TEMP/defender-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -46,7 +47,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Remove local evidence
-        if: always()
+        if: always() && env.DEFENDER_OUTPUT != ''
         run: |
           python3 - <<'PYTHON'
           import os
