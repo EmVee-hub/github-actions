@@ -1,4 +1,5 @@
 """Offline tests for CISA-ADP SSVC parsing and policy integration."""
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -85,14 +86,13 @@ class VulnrichmentTests(unittest.TestCase):
             self.assertEqual(fv.fetch_one(CVE, retries=0)["status"], "FETCH_ERROR")
 
 
-    def test_markdown_decision_legend_and_vex_evidence(self):
-        """Reports explain guards and expose suppressed findings, not just a count."""
+    def test_markdown_decision_rule_column_and_vex_evidence(self):
+        """Per-scan reports retain rule fields and VEX evidence without repeating the legend."""
         sample = json.loads((ROOT / "tests/fixtures/grype-sample.json").read_text())
         result = ev.evaluate(sample, "public", "demo", BASE, AMP, MAPPING)
         report = ev.markdown_report(result)
-        self.assertIn("Decision rule legend", report)
-        self.assertIn("KEV_GUARD", report)
-        self.assertIn("VULNRICHMENT_LOOKUP_FAILED", report)
+        self.assertNotIn("Decision rule legend", report)
+        self.assertIn("## Scan results", report)
         self.assertIn("VEX-suppressed findings", report)
         self.assertIn("CVE-2024-00003", report)
         self.assertIn("Decision rule |", report)

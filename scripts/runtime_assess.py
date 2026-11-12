@@ -275,7 +275,7 @@ def markdown_report(report: dict) -> str:
     lines += ["", "## Summary", "",
               "Observed workload containers with eligible manifest digest: **" + str(report["runtime_workloads_observed"]) + "**.",
               "Unresolved workload containers: **" + str(len(report["runtime_inventory_unresolved"])) + "**.",
-              "Decision statuses: \`" + json.dumps(report["counts"], sort_keys=True) + "\`.", "",
+              "Decision statuses: `" + json.dumps(report["counts"], sort_keys=True) + "`.", "",
               "For full source, workload identity and SSVC evidence inspect the JSON artifact.",
               "A missing provider finding is **never** a verified clean workload."]
     return "\n".join(lines) + "\n"
