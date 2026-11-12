@@ -72,6 +72,24 @@ suppression, 1 ECR digest with no running workload match, and 1 Defender
 observation lacking digest identity. Those last two remain NOT_EVALUATED.
 The GitHub workflow runtime-demo.yml runs the same integration.
 
+## Private GitHub Actions pilot template
+
+Copy [examples/private-execution/runtime-pilot.yml](../examples/private-execution/runtime-pilot.yml)
+into the .github/workflows directory of a **private** execution repository.
+The workflow deliberately refuses to start in public repositories. Configure
+an isolated self-hosted Linux runner, a restricted runtime-security-read GitHub
+environment, AWS_RUNTIME_ROLE_ARN/AWS_ACCOUNT_ID (AWS), or Azure federated
+identity variables (AKS). For EKS/AKS the role also needs cluster credential
+access and Kubernetes RBAC to list the scoped Pods.
+
+It is a manually dispatched, **shadow-only** pilot: it collects provider findings
+and running workloads, fetches full KEV plus percentile/SSVC, runs the common
+policy and uploads short-lived evidence into the PRIVATE repository only.
+It checks out the current service-blueprint OpenVEX by a pinned commit; only
+workloads explicitly labeled project=service-blueprint can use that VEX.
+Review and update the pinned central toolkit SHA and project SHA when merging.
+It does not create cloud resources or automatically change production workloads.
+
 ## Real AWS ECS pilot — run in a PRIVATE execution environment
 
 **Do not upload real cloud inventory, package lists or security findings to
