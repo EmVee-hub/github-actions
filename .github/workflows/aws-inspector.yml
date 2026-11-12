@@ -73,7 +73,7 @@ jobs:
           set -euo pipefail
           python3 --version
           aws --version
-          python3 -m unittest discover -s tests -v
+          python3 -m unittest discover -s tests -p 'test_inspector.py' -v
       - uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
           role-to-assume: ${{ vars.AWS_INSPECTOR_ROLE_ARN }}
@@ -98,3 +98,4 @@ jobs:
           path: ${{ runner.temp }}/inspector-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.region }}/
           if-no-files-found: warn
           retention-days: 14
+

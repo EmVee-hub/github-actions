@@ -1,0 +1,38 @@
+name: Policy CI
+
+on:
+  push:
+    branches: [main, 'feature/**', 'feat/**']
+    paths:
+      - 'actions/**'
+      - 'policy/**'
+      - 'scripts/evaluate.py'
+      - 'scripts/validate_vex.py'
+      - 'tests/test_evaluate.py'
+      - 'tests/fixtures/grype-*.json'
+      - '.github/workflows/ci-policy.yml'
+  pull_request:
+    paths:
+      - 'actions/**'
+      - 'policy/**'
+      - 'scripts/evaluate.py'
+      - 'scripts/validate_vex.py'
+      - 'tests/test_evaluate.py'
+      - 'tests/fixtures/grype-*.json'
+      - '.github/workflows/ci-policy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Policy CI tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run policy tests without cloud credentials
+        run: python3 -m unittest discover -s tests -p 'test_evaluate.py' -v

@@ -1,7 +1,7 @@
 # github-actions — Grype / OpenVEX / BOD+EPSS CI starter
 
-This repository contains only the **CI security action**, the versioned decision policy,
-and unit tests. Azure Defender / AWS Inspector runtime readers are **not in this CI milestone**.
+This repository contains the **CI security action**, the versioned decision policy,
+and Azure Defender / AWS Inspector evidence-collection MVPs with independent tests.
 
 ## Action: `actions/grype-policy-scan`
 
@@ -92,3 +92,28 @@ observations. See [AWS setup and limitations](docs/aws-inspector.md).
 
 This collection workflow does not yet apply project VEX or the decision policy.
 A successful collection is not a deployment admission decision.
+
+
+## Azure Defender runtime collection
+
+See [Azure setup and offline debug](docs/azure-defender.md). The collector retains
+individual assessments and provisional CVE observations. Runtime correlation, VEX
+matching and policy evaluation remain pending for Azure.
+
+## Independent CI workflows
+
+| Workflow | Tests | Triggered by |
+|---|---|---|
+| `ci-defender.yml` — Defender CI | `test_read_azure.py` | Defender collector, query, fixtures, docs and workflows |
+| `ci-aws.yml` — AWS CI | `test_inspector.py` | Inspector collector, IAM, fixtures, docs and workflows |
+| `ci-policy.yml` — Policy CI | `test_evaluate.py` | Shared policy, Grype action, evaluator and fixtures |
+
+Each workflow supports manual dispatch and uses path filters for pushes and pull
+requests. A provider-only change does not trigger the other provider's CI. None
+of these CI workflows logs in to a cloud or collects live findings. The runtime
+collection workflows also run only their respective provider tests.
+
+The old `test.yml` workflow is replaced. If branch protection requires its old
+check, update that configuration before merging. Path-filtered workflows should
+not be unconditional required checks: a skipped workflow may leave such a check
+pending. No branch-protection settings are changed here.

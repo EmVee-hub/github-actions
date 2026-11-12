@@ -1,0 +1,54 @@
+name: Defender offline debug
+
+on:
+  workflow_dispatch:
+    inputs:
+      assessment_json:
+        description: 'Paste SYNTHETIC or SANITIZED Defender JSON. Blank uses example. Inputs and artifacts may be public.'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Normalize pasted or example evidence without Azure
+        env:
+          ASSESSMENT_JSON: ${{ inputs.assessment_json }}
+        run: |
+          if [ -n "$ASSESSMENT_JSON" ]; then
+            printf '%s' "$ASSESSMENT_JSON" | python3 scripts/read_azure.py --input - --out debug-output
+          else
+            python3 scripts/read_azure.py --input tests/fixtures/defender-sample.json --out debug-output
+          fi
+      - name: Show debug result counts
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path('debug-output/summary.json')
+          if path.exists():
+              data = json.loads(path.read_text())
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+                  out.write('## Defender offline debug\n\nNo Azure requests or policy evaluation.\n\n')
+                  for key in ('collection_status', 'assessment_count', 'observation_count', 'unresolved_count', 'error_type'):
+                      if key in data:
+                          out.write(f'- {key}: {data[key]}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: defender-debug-${{ github.run_id }}-${{ github.run_attempt }}
+          path: debug-output/
+          if-no-files-found: error
+          retention-days: 1
+

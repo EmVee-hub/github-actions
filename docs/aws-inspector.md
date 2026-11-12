@@ -48,7 +48,7 @@ configuration. This starter does not create cloud resources or enable paid scans
 ## Run and test locally
 
 ```bash
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -p 'test_inspector.py' -v
 python3 scripts/collect_inspector.py --region eu-north-1 --output ./report
 ```
 
@@ -156,3 +156,4 @@ VEX, intelligence enrichment and decision evaluation remain pending.
 
 Avoid pasting confidential inventory into a public repository or public workflow
 run. Use local replay for sensitive real exports.
+
