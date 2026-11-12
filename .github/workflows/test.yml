@@ -1,7 +1,7 @@
 name: Policy unit tests
 on:
   push:
-    branches: [main]
+    branches: [main, feature/aws-inspector]
   pull_request:
 permissions:
   contents: read
