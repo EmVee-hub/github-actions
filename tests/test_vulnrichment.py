@@ -85,5 +85,22 @@ class VulnrichmentTests(unittest.TestCase):
             self.assertEqual(fv.fetch_one(CVE, retries=0)["status"], "FETCH_ERROR")
 
 
+    def test_markdown_decision_legend_and_vex_evidence(self):
+        """Reports explain guards and expose suppressed findings, not just a count."""
+        sample = json.loads((ROOT / "tests/fixtures/grype-sample.json").read_text())
+        result = ev.evaluate(sample, "public", "demo", BASE, AMP, MAPPING)
+        report = ev.markdown_report(result)
+        self.assertIn("Decision rule legend", report)
+        self.assertIn("KEV_GUARD", report)
+        self.assertIn("VULNRICHMENT_LOOKUP_FAILED", report)
+        self.assertIn("VEX-suppressed findings", report)
+        self.assertIn("CVE-2024-00003", report)
+        self.assertIn("Decision rule |", report)
+
+    def test_report_without_vex_has_explicit_empty_message(self):
+        report = ev.evaluate({"matches": []}, "internal", "demo", BASE, AMP, MAPPING)
+        self.assertIn("No findings suppressed", ev.markdown_report(report))
+
+
 if __name__ == "__main__":
     unittest.main()

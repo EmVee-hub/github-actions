@@ -215,7 +215,7 @@ def markdown_report(report: dict) -> str:
              f"- Base: `{report['model']}`",
              f"- EPSS amplifier: `{report['amplifier']}`",
              f"- VEX-suppressed findings: {report['vex_ignored_count']}", "",
-             "| CVE/advisory | Package | KEV | Automatable | TI | SSVC lookup | EPSS bin | Base | Final | Source / guard |",
+             "| CVE/advisory | Package | KEV | Automatable | TI | SSVC lookup | EPSS bin | Base | Final | Decision rule |",
              "|---|---|---|---|---|---|---|---|---|---|"]
     for finding in report["findings"]:
         cells = [finding.get("cve") or finding.get("vulnerability_id"), finding.get("package"),
@@ -223,6 +223,35 @@ def markdown_report(report: dict) -> str:
                  finding.get("vulnrichment_status"), finding.get("epss_bin"),
                  finding.get("base_outcome"), finding.get("final_outcome"), finding.get("rule")]
         lines.append("| " + " | ".join(esc(c) for c in cells) + " |")
+    lines += ["", "## Decision rule legend", "",
+             "| Decision rule | Meaning |",
+             "|---|---|",
+             "| `AMPLIFIED` | EPSS quartile policy evaluated the BOD outcome; Q2 may leave it unchanged. |",
+             "| `KEV_GUARD` | KEV=Y: retain the original BOD outcome; EPSS cannot alter it. |",
+             "| `URGENT_BASE_GUARD` | Base outcome is already 3D or 3DF; do not downgrade. |",
+             "| `EPSS_UNAVAILABLE_NEUTRAL` | No EPSS percentile; use the neutral Q2 policy and record missing data. |",
+             "| `KEV_UNKNOWN` | CVE/KEV input unresolved; review is required. |",
+             "| `VULNRICHMENT_LOOKUP_FAILED` | CISA SSVC retrieval or parsing failed; review is required. |",
+             "",
+             "**Base** = unchanged CISA BOD 26-04 SSVC result from KEV, public exposure (PE),",
+             "automatable (A), and technical impact (TI). **Final** = base plus our local",
+             "EPSS quartile mapping and guards; 3DF includes forensic follow-up.",
+             "**Q1..Q4** are EPSS percentile quartiles (not CVSS severity).",
+             "",
+             "## VEX-suppressed findings", "",
+             "Only applicability statements accepted by Grype move matched results out",
+             "of the active decision set. This does not delete the original finding.",
+             ""]
+    if report["ignored_matches"]:
+        lines += ["| Vulnerability | Package | Ignore evidence |",
+                  "|---|---|---|"]
+        for item in report["ignored_matches"]:
+            reasons = "; ".join(str(x.get("namespace") or x.get("reason") or x)
+                                for x in item.get("applied_ignore_rules", []))
+            lines.append("| " + " | ".join(esc(x) for x in
+                [item.get("vulnerability_id"), item.get("package"), reasons or "unknown"]) + " |")
+    else:
+        lines.append("_No findings suppressed. The presence of a VEX file alone is not proof of application._")
     lines += ["", "## Known MVP limits", ""] + [f"- {w}" for w in report["warnings"]]
     return "\n".join(lines) + "\n"
 
