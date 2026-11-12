@@ -228,6 +228,16 @@ class RuntimePolicyTests(unittest.TestCase):
         row = run(inspector(), vex={})["observations"][0]
         self.assertIn("PROJECT_VEX_NOT_AVAILABLE", row["reasons"])
 
+    def test_intelligence_selection_uses_running_digest_not_all_registry_findings(self):
+        source = policy.observations(inspector(), None)
+        source.append(policy.observations(inspector(cve="CVE-2028-99999", digest=D2), None)[0])
+        selected = policy.cves_for_intelligence(source, [inventory(workload())])
+        self.assertEqual(selected, [CVE])
+        self.assertEqual(len(policy.cves_for_intelligence(source)), 2)
+
+    def test_missing_inventory_rejected_during_cve_selection(self):
+        with self.assertRaises(ValueError):
+            policy.cves_for_intelligence(policy.observations(inspector(), None), [])
     def test_no_provider_finding_not_clean_coverage(self):
         result = run({"findings": []})
         self.assertEqual(result["observations"], [])

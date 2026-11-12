@@ -296,6 +296,19 @@ def read_vex_map(path: Path) -> dict:
     return docs
 
 
+def cves_for_intelligence(source_rows: list[dict], inventories: list[dict] | None = None) -> list[str]:
+    """Select CVEs on running-image observations; optionally allow all provider CVEs."""
+    candidates = source_rows
+    if inventories is not None:
+        if not inventories or any(i.get("collection_complete") is not True
+                                  or not isinstance(i.get("workloads"), list) for i in inventories):
+            raise ValueError("Runtime inventory missing/incomplete")
+        workloads = [w for inventory in inventories for w in inventory["workloads"]]
+        candidates = [row for row in source_rows if join(row, workloads)[0]]
+    return sorted({row["cve"] for row in candidates
+                   if isinstance(row.get("cve"), str) and CVE.fullmatch(row["cve"])})
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--inspector", type=Path, help="Normalized Inspector findings JSON")
@@ -314,9 +327,10 @@ def main() -> None:
         p.error("--inspector and/or --defender is required")
     obs = observations(inspector, defender)
     if args.cves_only:
-        args.cves_only.write_text(json.dumps(sorted({
-            r["cve"] for r in obs if isinstance(r.get("cve"), str) and CVE.fullmatch(r["cve"])
-        }), indent=2) + "\n")
+        selected_inventory = ([json.loads(f.read_text()) for f in args.inventory]
+                              if args.inventory else None)
+        args.cves_only.write_text(
+            json.dumps(cves_for_intelligence(obs, selected_inventory), indent=2) + "\n")
         return
     if not (args.inventory and args.intel and args.output and args.markdown):
         p.error("--inventory, --intel, --output and --markdown required for assessment")
