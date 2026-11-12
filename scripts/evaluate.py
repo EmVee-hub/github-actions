@@ -185,7 +185,8 @@ def make_decision(match: dict, exposure: str, mapping: dict, amp: dict,
 def suppression_reason(match: dict, vex: dict | None, image: str) -> str:
     """Annotate Grype-ignored records only; never decide applicability here.
 
-    Require an exact image and component identity before borrowing VEX prose.
+    Accept an exact package product, or an exact image plus component identity.
+    This is display-only metadata for records already ignored by Grype VEX.
     Ambiguous or unavailable explanations are explicit rather than guessed.
     """
     rules = match.get("appliedIgnoreRules") or []
@@ -204,14 +205,21 @@ def suppression_reason(match: dict, vex: dict | None, image: str) -> str:
         if statement.get("status") not in ("not_affected", "fixed"):
             continue
         for product in statement.get("products", []):
-            if image not in (product.get("@id"), (product.get("identifiers") or {}).get("purl")):
+            product_ids = (product.get("@id"), (product.get("identifiers") or {}).get("purl"))
+            package_match = bool(purl and purl in product_ids)
+            image_match = image in product_ids and bool(purl) and any(
+                purl in (c.get("@id"), (c.get("identifiers") or {}).get("purl"))
+                for c in product.get("subcomponents", []))
+            if not (package_match or image_match):
                 continue
-            if not purl or not any(purl in (c.get("@id"), (c.get("identifiers") or {}).get("purl"))
-                                   for c in product.get("subcomponents", [])):
-                continue
-            reason = statement.get("impact_statement") or statement.get("justification")
-            if isinstance(reason, str) and reason.strip():
-                reasons.add(reason.strip())
+            justification = statement.get("justification")
+            impact = statement.get("impact_statement")
+            justification = justification.strip() if isinstance(justification, str) else ""
+            impact = impact.strip() if isinstance(impact, str) else ""
+            if justification and impact:
+                reasons.add("Justification: " + justification + "; Impact: " + impact)
+            elif justification or impact:
+                reasons.add(justification or impact)
     if len(reasons) == 1:
         return reasons.pop()
     return "Multiple VEX reasons; review source document" if reasons else "Not provided"
@@ -368,5 +376,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 
