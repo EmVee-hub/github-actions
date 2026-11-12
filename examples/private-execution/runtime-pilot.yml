@@ -62,7 +62,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: EmVee-hub/github-actions
-          ref: 579ba8d9e7d826e4b8e8d3ef987413e23817ebcd
+          ref: 1a4180a4f9d408e2c9420103567baa18b07e9a31
           path: security-toolkit
           persist-credentials: false
 
