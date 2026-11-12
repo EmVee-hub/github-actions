@@ -110,15 +110,16 @@ passes offline on AKS and EKS Pod fixtures. **Real cloud coverage and identity
 verification are not yet completed; particularly Azure Defender digest and
 package mapping require sanitized provider evidence.**
 
-## AWS Inspector runtime collection
+## AWS Inspector container evidence — PoC
 
-The initial AWS collector uses OIDC to read Inspector findings and scan coverage
-across configured Regions, filters to ECR container images, and normalizes package
-observations. See [AWS setup and limitations](docs/aws-inspector.md).
+The Inspector collector script reads ECR container-image package findings
+and normalizes them for an EKS Pod correlation check. The public
+[`poc-showcase.yml`](.github/workflows/poc-showcase.yml) feeds it **synthetic
+Inspector fixtures**; no live AWS account is contacted.
 
-This collection workflow does not yet apply project VEX or the decision policy.
-A successful collection is not a deployment admission decision.
-
+See [Inspector setup, evidence constraints and limitations](docs/aws-inspector.md).
+An ECR image finding only becomes part of our runtime CVE assessment after an
+exact match to an observed **running EKS Pod image digest**.
 
 ## Azure Defender container evidence — PoC
 
