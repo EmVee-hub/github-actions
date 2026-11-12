@@ -98,6 +98,18 @@ Upstream references:
 - [Grype JSON schema and formats](https://oss.anchore.com/docs/reference/grype/json/)
 - [GitHub composite actions](https://docs.github.com/en/actions/tutorials/create-actions/create-a-composite-action)
 
+## Runtime cloud findings → shared BOD/EPSS
+
+See [AKS/EKS/ECS runtime correlation and policy pilot](docs/runtime-mvp.md).
+It implements read-only workload digest inventory, exact AWS Inspector/Defender
+finding joins, complete CISA KEV + FIRST EPSS + CISA Vulnrichment lookup,
+shared BOD 26-04 + local amplifier, and project-scoped VEX statuses.
+
+The [synthetic end-to-end workflow](.github/workflows/runtime-demo.yml)
+passes offline on AKS, EKS and ECS fixtures. **Real cloud coverage and identity
+verification are not yet completed; particularly Azure Defender digest and
+package mapping require sanitized provider evidence.**
+
 ## AWS Inspector runtime collection
 
 The initial AWS collector uses OIDC to read Inspector findings and scan coverage
