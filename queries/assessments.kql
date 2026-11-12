@@ -1,6 +1,9 @@
+// Candidate container-image assessments only; runtime correlation is a separate gate.
+// This deliberately excludes nodes, VMs, generic SoftwareUpdate findings.
+// Exact ResourceType values must be validated against your tenant's current
+// Defender for Containers assessment schema before claiming live coverage.
 securityresources
 | where type =~ 'microsoft.security/assessments'
-| where properties.metadata.recommendationCategory in ('SoftwareUpdate', 'ServiceUpgrade')
+| where tolower(tostring(properties.resourceDetails.ResourceType)) in ('k8s-container', '.containerimage', 'container-image')
 | project id, name, subscriptionId, resourceGroup, properties
 | order by id asc
-

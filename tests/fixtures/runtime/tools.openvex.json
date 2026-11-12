@@ -1,0 +1,26 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://example.invalid/runtime/tools",
+  "author": "SYNTHETIC TEST FIXTURE",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2021-44228"
+      },
+      "products": [
+        {
+          "@id": "urn:container:sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "subcomponents": [
+            {
+              "@id": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "SYNTHETIC FIXTURE ONLY — inert example. Not verified for a real deployment."
+    }
+  ]
+}

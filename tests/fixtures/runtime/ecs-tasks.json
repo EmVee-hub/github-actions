@@ -1,0 +1,32 @@
+{
+  "tasks": [
+    {
+      "taskArn": "arn:aws:ecs:eu-north-1:123456789012:task/sample/task-1",
+      "group": "service:billing",
+      "lastStatus": "RUNNING",
+      "desiredStatus": "RUNNING",
+      "tags": [
+        {
+          "key": "security.example.com/project",
+          "value": "billing"
+        },
+        {
+          "key": "security.example.com/exposure",
+          "value": "public"
+        },
+        {
+          "key": "security.example.com/prod-critical",
+          "value": "true"
+        }
+      ],
+      "containers": [
+        {
+          "name": "app",
+          "lastStatus": "RUNNING",
+          "image": "123456789012.dkr.ecr.eu-north-1.amazonaws.com/billing/api:v3",
+          "imageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ]
+    }
+  ]
+}

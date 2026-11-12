@@ -12,8 +12,10 @@ spec.loader.exec_module(c)
 SUB = '11111111-1111-1111-1111-111111111111'
 
 
-def row(identity='a', cves=None):
-    return {'id': identity, 'subscriptionId': SUB, 'properties': {'additionalData': {'CvesDetails': cves}}}
+def row(identity='a', cves=None, resource_type='container-image'):
+    return {'id': identity, 'subscriptionId': SUB, 'properties': {
+        'resourceDetails': {'ResourceType': resource_type},
+        'additionalData': {'CvesDetails': cves}}}
 
 
 class CollectorTests(unittest.TestCase):
@@ -85,6 +87,17 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(observations[0]['decision'], 'INCOMPLETE')
         self.assertIsNone(observations[0]['runtime_confirmed'])
         self.assertIsNone(observations[0]['image_digest'])
+
+    def test_rejects_vm_and_generic_assessments(self):
+        good = row('image', [{'CveId': 'CVE-2021-44228'}])
+        host = row('node', [{'CveId': 'CVE-2021-44228'}],
+                   resource_type='microsoft.compute/virtualmachines')
+        unknown = row('unknown', [{'CveId': 'CVE-2021-44228'}],
+                      resource_type=None)
+        observations, unresolved = c.normalize([good, host, unknown])
+        self.assertEqual(len(observations), 1)
+        self.assertEqual(unresolved, [])
+        self.assertEqual(observations[0]['assessment_id'], 'image')
 
     def test_subscription_validation(self):
         for value in ['[]', '{}', '["not-a-uuid"]']:
