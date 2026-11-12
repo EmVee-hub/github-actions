@@ -34,19 +34,32 @@ Outputs: `admission` (`ALLOW`, `BLOCK`, `REVIEW_REQUIRED`), `report-json`, `repo
 4. Ignore `ignoredMatches` for the gate, but retain them in reports.
 5. Look up distinct unsuppressed CVEs in CISA's ADP Vulnrichment data via CVE Services.
 6. Compute BOD 26-04 outcomes using published SSVC Automatable and Technical Impact when present; otherwise use our defaults.
-7. Apply the shared PoC KEV and EPSS probability policy.
+7. Apply the local, JSON-configured EPSS percentile-quartile amplifier **after** BOD, preserving KEV and base 3D/3DF decisions.
 8. Produce Grype, Vulnrichment, decision JSON and Markdown summary.
 9. In `shadow` mode, report blocking policy decisions without failing. In `enforce`, fail unless decision is `ALLOW`.
 
 ### Policy and safety limits
 
-The CI and runtime PoC reports retain the BOD result and use the same local targets. KEV gets 3D or retains 3DF where the BOD table calls for forensic follow-up. Non-KEV gets 30D at EPSS probability ≥10%, 60D at ≥5% and <10%, and FSU below 5% or when EPSS is missing. In CI, KEV blocks and incomplete assessments still require review. Runtime assessment assigns remediation targets and reports VEX and disposition status.
+**The CISA BOD 26-04 decision table is the authoritative base decision model.**
+CI and AKS/EKS runtime use the same 16 BOD outcomes based on KEV, publicly
+exposed, Automatable and Technical Impact. The local EPSS *percentile* quartile
+amplifier in `policy/epss-amplifier.json` applies **after** BOD; it may adjust
+FSU/60D/14D for non-KEV findings. KEV=Y preserves the base outcome, base
+3D/3DF cannot be downgraded, and EPSS cannot create 3DF.
+
+**CI gate:** after VEX filtering and evaluation, final `3D` or `3DF` means
+BLOCK, `FSU`/`60D`/`14D` means ALLOW and incomplete evidence means
+REVIEW_REQUIRED. In `enforce`, BLOCK and REVIEW_REQUIRED fail the scan;
+`shadow` reports decisions without blocking. This is our local CI gate,
+not a gate defined by CISA itself. Runtime assessments report final priority
+and VEX applicability but do not enforce deployments. This restores the
+original BOD-led behavior and removes the experimental 5%/10% probability policy.
 
 - The BOD table is a semantic copy of the 16 outcomes of `cisa:DT_BOD2604:1.0.0`, **not the original repository's schema**.
 - `Automatable` uses the published CISA-ADP SSVC value when available; otherwise defaults to `Y`.
 - Technical Impact: prefer CISA-ADP SSVC; otherwise use the **local heuristic** `T` when CVSS v3 has both `C:H` and `I:H`, `P` for other known C/I, or conservative `T` if unavailable.
 - `KEV=Y` if Grype has nonempty `knownExploited`. If the ID maps to a CVE but no KEV annotation is present, `KEV=N` is **provisional** based on Grype's database, not independently validated against the live CISA catalog. If there is no CVE mapping, `KEV=UNKNOWN` and the action reports `REVIEW_REQUIRED`.
-- Missing EPSS maps to FSU for non-KEV findings.
+- Missing EPSS uses the documented neutral Q2 quartile; it does **not** automatically replace a BOD deadline with FSU.
 - This uses policy evaluation only; it does **not** validate that an exposure declaration matches actual networking.
 - OpenVEX statements must be reviewed before being accepted; the sanity check doesn't validate signatures, scope or whether technical justifications are true.
 - CISA SSVC lookup failures (network errors or invalid payload) produce `REVIEW_REQUIRED`, not a silent fallback. No assessment / 404 uses the documented defaults. VEX attestation verification, exposure inventory and production digest promotion remain gaps before enforcement.
@@ -164,4 +177,10 @@ calibration, dispositions and enforcement remain MVP work.
 
 
 
-The PoC thresholds, KEV outcomes and non-KEV fallbacks are configured in `policy/epss-amplifier.json` under `probability_policy`. Thresholds use EPSS probability fractions and must be listed in descending order. The existing quartile table supports legacy callers. Both CI and runtime load this file.
+The single active EPSS amplifier is the `table` in
+[`policy/epss-amplifier.json`](policy/epss-amplifier.json).
+Its Q1–Q4 thresholds use **EPSS percentile**, not EPSS probability.
+Both CI and runtime load that JSON at evaluation time. The BOD decision-table
+file `policy/bod-26-04.json` remains unchanged. The old probability override
+and alternate action switch are removed; review and update caller action SHA pins
+when changing this policy.

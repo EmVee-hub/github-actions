@@ -25,7 +25,10 @@ but an exclusion count is retained to avoid treating missing evidence as safe.
    **not** prove a running image match.
 4. Fetch authoritative and explicitly complete CISA KEV, FIRST EPSS
    **percentile**, and CISA-ADP Vulnrichment SSVC.
-5. Calculate the BOD 26-04 outcome and apply the same local KEV and EPSS probability targets as Grype CI.
+5. Evaluate **CISA BOD 26-04 as the authoritative base table** and apply
+   the local EPSS percentile-quartile amplifier in `policy/epss-amplifier.json`.
+   KEV and base 3D/3DF outcomes are preserved; EPSS never creates 3DF.
+   The resulting priorities match the Grype CI decision model.
 6. Load operator-reviewed project VEX from an explicit local project/path
    map. Exact CVE, immutable image product, and versioned package PURL are
    required to consider a not_affected statement for suppression.
@@ -74,7 +77,8 @@ python3 scripts/runtime_assess.py \
   --markdown /tmp/runtime-demo/assessment.md
 ~~~
 
-Expected: 2 EKS Pod findings evaluated and 1 synthetic AKS VEX
+Expected: 2 EKS Pod findings evaluated (with a BOD 3D amplified outcome
+and a KEV-protected 3DF outcome) and 1 synthetic AKS VEX
 suppression. An unmatched ECR image and a Defender record with missing digest
 are counted as **excluded** rather than shown as running-container CVEs.
 The manual GitHub workflow `.github/workflows/poc-showcase.yml` (scenario: `runtime` or `all`) replays the same synthetic integration.
