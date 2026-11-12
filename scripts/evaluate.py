@@ -172,8 +172,43 @@ def make_decision(match: dict, exposure: str, mapping: dict, amp: dict,
     return row
 
 
+def suppression_reason(match: dict, vex: dict | None, image: str) -> str:
+    """Annotate Grype-ignored records only; never decide applicability here.
+
+    Require an exact image and component identity before borrowing VEX prose.
+    Ambiguous or unavailable explanations are explicit rather than guessed.
+    """
+    rules = match.get("appliedIgnoreRules") or []
+    if not any(r.get("namespace") == "vex" or r.get("vexStatus")
+               or "vex" in str(r.get("reason", "")).lower()
+               for r in rules if isinstance(r, dict)):
+        return "Not provided"
+    ids = {v.get("id") for v in [match.get("vulnerability") or {}]
+           + (match.get("relatedVulnerabilities") or [])}
+    purl = (match.get("artifact") or {}).get("purl")
+    reasons = set()
+    for statement in (vex or {}).get("statements", []):
+        vulnerability = statement.get("vulnerability") or {}
+        if not ({vulnerability.get("name"), vulnerability.get("@id")} - {None}) & ids:
+            continue
+        if statement.get("status") not in ("not_affected", "fixed"):
+            continue
+        for product in statement.get("products", []):
+            if image not in (product.get("@id"), (product.get("identifiers") or {}).get("purl")):
+                continue
+            if not purl or not any(purl in (c.get("@id"), (c.get("identifiers") or {}).get("purl"))
+                                   for c in product.get("subcomponents", [])):
+                continue
+            reason = statement.get("impact_statement") or statement.get("justification")
+            if isinstance(reason, str) and reason.strip():
+                reasons.add(reason.strip())
+    if len(reasons) == 1:
+        return reasons.pop()
+    return "Multiple VEX reasons; review source document" if reasons else "Not provided"
+
+
 def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
-             mapping: dict, enrichment: dict | None = None) -> dict:
+             mapping: dict, enrichment: dict | None = None, vex: dict | None = None) -> dict:
     if not isinstance(data, dict) or not isinstance(data.get("matches"), list):
         raise ValueError("Invalid Grype report: expected 'matches' array")
     if exposure not in ("public", "internal", "unknown"):
@@ -184,7 +219,8 @@ def evaluate(data: dict, exposure: str, image: str, base: dict, amp: dict,
         v = match.get("vulnerability") or {}
         a = match.get("artifact") or {}
         ignored.append({"vulnerability_id": v.get("id"), "package": a.get("name"),
-                        "applied_ignore_rules": match.get("appliedIgnoreRules", [])})
+                        "applied_ignore_rules": match.get("appliedIgnoreRules", []),
+                        "reason": suppression_reason(match, vex, image)})
     counts = Counter(f.get("final_outcome") or "INCOMPLETE" for f in findings)
     decision = "BLOCK" if counts["3D"] or counts["3DF"] else (
         "REVIEW_REQUIRED" if counts["INCOMPLETE"] else "ALLOW")
@@ -235,12 +271,12 @@ def markdown_report(report: dict) -> str:
         lines.append("| No active findings | — | — | — | — | — | — | — | — | — | — | — |")
     lines += ["","## VEX-suppressed findings","","VEX can change **applicability**, not the CVE severity. Only findings accepted by Grype's VEX matching are excluded from the active gate; the original records remain below.",""]
     if report["ignored_matches"]:
-        lines += ["| Vulnerability | Package | Ignore evidence |","|---|---|---|"]
+        lines += ["| Vulnerability | Package | Ignore evidence | Reason |","|---|---|---|---|"]
         for item in report["ignored_matches"]:
             reasons = "; ".join(str(x.get("namespace") or x.get("reason") or x)
                                 for x in item.get("applied_ignore_rules", []))
             lines.append("| " + " | ".join(esc(x) for x in
-                [item.get("vulnerability_id"), item.get("package"), reasons or "unknown"]) + " |")
+                [item.get("vulnerability_id"), item.get("package"), reasons or "unknown", item.get("reason") or "Not provided"]) + " |")
     else:
         lines.append("_No findings suppressed. Having a VEX document alone does not prove a statement matched._")
     lines += ["", "## Known MVP limits", ""] + ["- " + str(w) for w in report["warnings"]]
@@ -254,13 +290,15 @@ def main() -> None:
     p.add_argument("--image", required=True)
     p.add_argument("--vulnrichment", help="CVE Services CISA-ADP lookup JSON from fetch_vulnrichment.py")
     p.add_argument("--exposure", choices=("public", "internal", "unknown"), default="unknown")
+    p.add_argument("--vex", help="OpenVEX document for display-only suppression reasons")
     p.add_argument("--output", required=True)
     p.add_argument("--markdown", required=True)
     a = p.parse_args()
     base, amp, mapping = load_policy(Path(a.policy_dir))
     data = json.loads(Path(a.input).read_text(encoding="utf-8"))
     enrichment = json.loads(Path(a.vulnrichment).read_text(encoding="utf-8")) if a.vulnrichment else None
-    report = evaluate(data, a.exposure, a.image, base, amp, mapping, enrichment)
+    vex = json.loads(Path(a.vex).read_text(encoding="utf-8")) if a.vex else None
+    report = evaluate(data, a.exposure, a.image, base, amp, mapping, enrichment, vex)
     Path(a.output).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     Path(a.markdown).write_text(markdown_report(report), encoding="utf-8")
     print(report["admission"])
@@ -268,3 +306,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
