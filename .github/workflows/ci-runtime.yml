@@ -13,6 +13,8 @@ on:
       - tests/test_runtime_*.py
       - tests/fixtures/runtime/**
       - .github/workflows/ci-runtime.yml
+      - examples/private-execution/**
+      - docs/runtime-mvp.md
   pull_request:
     paths:
       - scripts/runtime_workloads.py
@@ -23,6 +25,8 @@ on:
       - tests/test_runtime_*.py
       - tests/fixtures/runtime/**
       - .github/workflows/ci-runtime.yml
+      - examples/private-execution/**
+      - docs/runtime-mvp.md
 
 permissions:
   contents: read
