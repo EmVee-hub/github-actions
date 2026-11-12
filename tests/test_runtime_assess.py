@@ -103,10 +103,10 @@ class RuntimePolicyTests(unittest.TestCase):
         # Inspector zero 'in use' is not a confirmed runtime negative.
         self.assertEqual(r["runtime_workloads_observed"], 1)
 
-    def test_ecs_inspector_same_immutable_digest(self):
-        row = run(inspector(), inventories=[inventory(workload("ECS"))])["observations"][0]
-        self.assertEqual(row["platform"], "ECS")
-        self.assertEqual(row["decision_status"], "EVALUATED")
+    def test_reject_non_pod_inventory_platform(self):
+        invalid = workload("UNSUPPORTED")
+        with self.assertRaisesRegex(ValueError, "AKS/EKS Pod"):
+            run(inspector(), inventories=[inventory(invalid)])
 
     def test_defender_aks_with_verified_digest_identity(self):
         row = run(defender_data=defender(), inventories=[inventory(workload("AKS"))])["observations"][0]
