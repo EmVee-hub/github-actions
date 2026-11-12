@@ -1,7 +1,7 @@
 # github-actions — Grype / OpenVEX / BOD+EPSS CI starter
 
 This repository contains the **CI security action**, the versioned decision policy,
-and Azure Defender / AWS Inspector evidence-collection MVPs with independent tests.
+and Azure Defender / AWS Inspector evidence-collection PoC code with independent tests.
 
 ## Action: `actions/grype-policy-scan`
 
@@ -100,12 +100,12 @@ Upstream references:
 
 ## Runtime cloud findings → shared BOD/EPSS
 
-See [AKS/EKS runtime correlation and policy pilot](docs/runtime-mvp.md).
+See [AKS/EKS running-container correlation PoC](docs/runtime-poc.md).
 It implements read-only workload digest inventory, exact AWS Inspector/Defender
 finding joins, complete CISA KEV + FIRST EPSS + CISA Vulnrichment lookup,
 shared BOD 26-04 + local amplifier, and project-scoped VEX statuses.
 
-The [synthetic end-to-end workflow](.github/workflows/runtime-demo.yml)
+The [manual synthetic PoC showcase](.github/workflows/poc-showcase.yml)
 passes offline on AKS and EKS Pod fixtures. **Real cloud coverage and identity
 verification are not yet completed; particularly Azure Defender digest and
 package mapping require sanitized provider evidence.**
@@ -120,37 +120,42 @@ This collection workflow does not yet apply project VEX or the decision policy.
 A successful collection is not a deployment admission decision.
 
 
-## Azure Defender runtime collection
+## Azure Defender container evidence — PoC
 
-See [Azure setup and offline debug](docs/azure-defender.md). The collector retains
-individual assessments and provisional CVE observations. Runtime correlation, VEX
-matching and policy evaluation are implemented for synthetic AKS Pod evidence, but live Defender identity mapping is not yet validated.
+See [Azure setup and offline normalization](docs/azure-defender.md).
+The collector produces provisional container findings. AKS Pod digest
+correlation, VEX and policy evaluation pass synthetic tests; **live
+Defender image/package identity and coverage remain unverified**.
 
-## GitHub Actions workflows — consolidated
+## Workflows — completed technical PoC
 
-The former `ci-policy.yml`, `ci-aws.yml`, `ci-defender.yml` and
-`ci-runtime.yml` are consolidated into **one** `.github/workflows/ci.yml`.
-It runs on every PR, pushes to `main`, or on manual dispatch, and executes
-all offline Python tests (policy, VEX, Vulnrichment, Inspector, Defender,
-AKS/EKS Pod inventory/correlation and the synthetic end-to-end CLI replay).
+This public repository intentionally contains **two** GitHub Actions
+workflows:
 
-The synthetic `.github/workflows/runtime-demo.yml` is now **manual-only**.
-It publishes a detailed comparison and artifacts for walkthroughs; automated
-assertions still run in central CI. The old `defender-debug.yml` workflow was
-retired because its input/fixture normalization remains available directly:
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | Pull requests, main push, manual | Offline policy, Inspector, Defender, AKS/EKS correlation and VEX regression tests; no cloud credentials |
+| [`poc-showcase.yml`](.github/workflows/poc-showcase.yml) | Manual only | Choose `all`, `runtime`, `inspector` or `defender`; run synthetic cases and publish demonstration artifacts |
+
+The former `runtime-demo.yml`, `aws-inspector.yml` and
+`defender-cloud.yml` workflows have been consolidated/retired.
+**The previous scheduled Azure collection and public-repository live AWS/Azure
+collection are deliberately disabled**. Nothing in these two workflows
+accesses a real cloud account or verifies production workload coverage.
+
+Run the offline provider CLIs locally if required:
 
 ```bash
-python3 scripts/read_azure.py --input tests/fixtures/defender-sample.json --out /tmp/defender-debug
-python3 scripts/collect_inspector.py --input-file tests/fixtures/inspector-debug.json --output /tmp/inspector-debug
+python3 scripts/read_azure.py --input tests/fixtures/defender-sample.json --out /tmp/defender-poc
+python3 scripts/collect_inspector.py --input-file tests/fixtures/inspector-debug.json --output /tmp/inspector-poc
 ```
 
-**Live collectors remain separate for now:** `defender-cloud.yml` and
-`aws-inspector.yml` still have their existing manual/scheduled execution
-and cloud authentication behavior. Their migration to the documented
-private runtime pilot is a separate, security-sensitive change. This
-consolidation does not run cloud collection in central CI.
+A separate [private execution template](examples/private-execution/runtime-pilot.yml)
+documents how a future **operational MVP pilot** could test real AKS/EKS
+identity and policy decisions under read-only OIDC and Kubernetes RBAC.
+Do **not** upload live security findings into this public repository.
 
-**Branch protection:** if `Policy CI tests`, `AWS CI tests`,
-`Defender CI tests` or `Offline AKS/EKS Pod correlation + BOD/EPSS tests`
-are required checks, update the rules to the new
-`Security unit and offline integration tests` check **when merging**.
+**PoC conclusion:** the CI and synthetic correlation pipeline demonstrates
+technical feasibility. Live-cloud coverage, approved VEX provenance, policy
+calibration, dispositions and enforcement remain MVP work.
+

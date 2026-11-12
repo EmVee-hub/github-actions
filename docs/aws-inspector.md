@@ -8,7 +8,7 @@ The Inspector collector (`scripts/collect_inspector.py`) requests only `AWS_ECR_
 
 The evaluator (`scripts/runtime_assess.py`) reports a CVE only after matching ECR account, Region, repository and **immutable image digest** to an observed RUNNING EKS Pod container. Inspector `inUseCount` is not reliable proof of running workload identity. Unmatched image findings are excluded from the active runtime table, with aggregate counts retained. A zero-finding result does not establish runtime scan coverage.
 
-The existing `.github/workflows/aws-inspector.yml` reads collection evidence. For an operational pilot, use the **private** `examples/private-execution/runtime-pilot.yml` with read-only OIDC, trusted runners and Kubernetes Pod-list RBAC. Do not upload live AWS findings to this public repository.
+The public [`poc-showcase.yml`](../.github/workflows/poc-showcase.yml) offers a **manual synthetic Inspector** scenario. The previous `aws-inspector.yml` live workflow was retired. For a future **operational MVP** pilot, use the **private** `examples/private-execution/runtime-pilot.yml` with read-only OIDC, trusted runners and Kubernetes Pod-list RBAC. Do not upload live AWS findings to this public repository.
 
 Outputs remain `manifest.json`, `raw-findings.json`, `normalized-findings.json`, and `coverage.json`; all retained findings are **ECR container images only**. Registry coverage remains different from running workload coverage. Provider SUPPRESSED does not equal project VEX.
 

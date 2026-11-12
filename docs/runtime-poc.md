@@ -2,7 +2,7 @@
 
 **Status:** an implemented, testable correlation-and-policy slice. The synthetic
 AKS/EKS integration passed CI, but **real customer-cloud runtime coverage has
-not yet been validated**. This is an MVP candidate rather than production sign-off.
+not yet been validated**. This is a completed **technical PoC**, not an operational MVP or production sign-off.
 
 ## Container-only scope
 
@@ -78,9 +78,15 @@ python3 scripts/runtime_assess.py \
 Expected: 2 EKS Pod findings evaluated and 1 synthetic AKS VEX
 suppression. An unmatched ECR image and a Defender record with missing digest
 are counted as **excluded** rather than shown as running-container CVEs.
-The GitHub workflow runtime-demo.yml runs the same integration.
+The manual GitHub workflow `.github/workflows/poc-showcase.yml` (scenario: `runtime` or `all`) replays the same synthetic integration.
 
-## Private GitHub Actions pilot template
+## Private AKS/EKS pilot template — next-phase validation
+
+The completed public PoC does **not** execute live cloud-collection
+workflows or scheduled scans. Only synthetic findings are used in the
+public `poc-showcase.yml`. The following private pilot is retained as
+a **future validation template**, not proof that actual cluster findings
+have already been correlated.
 
 Copy [examples/private-execution/runtime-pilot.yml](../examples/private-execution/runtime-pilot.yml)
 into the .github/workflows directory of a **private** execution repository.
@@ -130,7 +136,7 @@ python3 scripts/runtime_assess.py \
   --output /tmp/live-decisions.json --markdown /tmp/live-report.md
 ~~~
 
-For Pod metadata, the MVP reads these explicit, organization-defined labels:
+For Pod metadata, this PoC reads these explicit, organization-defined labels:
 `security.example.com/project`, `security.example.com/exposure`, and
 `security.example.com/prod-critical`. The exporter does not infer actual
 Internet exposure or business criticality from cluster networking.
@@ -179,7 +185,7 @@ claiming production AKS correlation. Do not infer a digest from a CVE or tag.
 - No durable first/last-seen ledger, remediation owner tracking, 3DF incident
   workflow, or 95% prod-critical disposition accounting exists yet.
 
-**MVP acceptance should require:** a private EKS pilot matching Inspector
+**Next phase — operational MVP acceptance requires:** a private EKS pilot matching Inspector
 image digests to running Pods, a separate AKS pilot, coverage and freshness
 validation, verified Defender image identity, approved project VEX and a
 persistent triage/disposition store.

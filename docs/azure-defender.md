@@ -10,7 +10,7 @@
 
 The runtime evaluator requires confirmed RUNNING Pod status, subscription, registry/repository and immutable image digest. Defender records missing digest/package identity remain outside the active running-container CVE report, with aggregate exclusion counts. Do not fill missing identities from CVE text or image tags.
 
-Use a private read-only OIDC/AKS RBAC pilot, never upload sensitive tenant data in the public source repo. See `docs/runtime-mvp.md` and `examples/private-execution/runtime-pilot.yml`. The existing Defender collection GitHub workflow is not a production runtime security gate.
+The manual public `poc-showcase.yml` uses **synthetic Defender fixtures only**. The previous scheduled `defender-cloud.yml` collection is retired. For a future operational MVP, use a **private** read-only OIDC/AKS RBAC pilot; never upload sensitive tenant data in the public source repo. See `docs/runtime-poc.md` and `examples/private-execution/runtime-pilot.yml`.
 
 ## Offline tests
 
