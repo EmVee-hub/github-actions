@@ -2,15 +2,16 @@
 
 **All results in this workflow are synthetic. No AWS/Azure credentials or live cloud collection are used.**
 
-Selecting **all** runs three independent demonstrations, not one connected collection pipeline:
+Selecting **all** runs one connected offline flow for both providers. **inspector** and **defender** run that same flow for the selected provider; **runtime** is an alias for both.
 
-| Job | What it shows | Input |
-|---|---|---|
-| AWS Inspector | Provider JSON converted into container/package findings | `tests/fixtures/inspector-debug.json` |
-| Azure Defender | CVEs extracted from container assessments, including unresolved records | `tests/fixtures/defender-sample.json` |
-| AKS/EKS correlation | Prepared provider observations matched to running Pod images, then VEX + BOD/EPSS | `tests/fixtures/runtime/` |
+1. Read raw provider-shaped JSON from `tests/fixtures/cloud-showcase/`.
+2. Run the actual Inspector and Defender normalizers; preserve their original JSON outputs.
+3. Apply `synthetic-identity-map.json` explicitly: Azure image/package identity and AWS package PURLs are fixture-supplied, not discovered from live clouds.
+4. Parse the AKS/EKS Pod fixtures and match exact image identities.
+5. Apply per-project VEX and the shared BOD/EPSS policy.
+6. Show separate AWS/Azure decision tables and a combined report from those same outputs.
 
-The provider jobs do **not** supply the combined runtime demo. Their counts and vulnerability IDs are therefore not expected to match. A live end-to-end run still needs validated provider identity and actual Pod inventory.
+**This connects the demo stages but does not solve live identity discovery.** Inspect `identity-map-used.json`, original normalized output, enriched output, and decisions in `connected-cloud-showcase`. Without identity mappings, affected rows remain excluded or require review. No matching finding is never a clean verdict.
 
 ## Reading the runtime table
 
@@ -46,4 +47,5 @@ A green job means the program ran and its assertions passed; it does not mean ze
 | Azure customer-api-abc | Active 3DF finding, no VEX exception; remediation and forensic follow-up indicated |
 | Azure internal-tools-abc | Same CVE, different image/project: suppressed by its exact scoped VEX statement |
 
-The Azure active example uses prepared runtime identity, not an improvement to live Defender identity extraction. Missing-identity and unmatched-image examples remain excluded and counted. The runtime report does not enforce deployment admission or stop workloads.
+The Azure active example uses explicit fixture identity mapping after actual normalization, not an improvement to live Defender identity extraction. Missing-identity and unmatched-image examples remain excluded and counted. The runtime report does not enforce deployment admission or stop workloads.
+

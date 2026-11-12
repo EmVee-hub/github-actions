@@ -1,0 +1,103 @@
+{
+  "findings": [
+    {
+      "findingArn": "arn:example:inspector:finding/1",
+      "awsAccountId": "123456789012",
+      "type": "PACKAGE_VULNERABILITY",
+      "status": "ACTIVE",
+      "severity": "HIGH",
+      "packageVulnerabilityDetails": {
+        "vulnerabilityId": "CVE-2021-45105",
+        "vulnerablePackages": [
+          {
+            "name": "log4j-core",
+            "version": "2.14.1",
+            "packageManager": "JAVA"
+          }
+        ],
+        "cvss": []
+      },
+      "resources": [
+        {
+          "type": "AWS_ECR_CONTAINER_IMAGE",
+          "id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "region": "eu-north-1",
+          "details": {
+            "awsEcrContainerImage": {
+              "imageHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "repositoryName": "payments/api",
+              "registry": "123456789012",
+              "inUseCount": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "findingArn": "arn:example:inspector:finding/2",
+      "awsAccountId": "123456789012",
+      "type": "PACKAGE_VULNERABILITY",
+      "status": "ACTIVE",
+      "severity": "CRITICAL",
+      "packageVulnerabilityDetails": {
+        "vulnerabilityId": "CVE-2021-45046",
+        "vulnerablePackages": [
+          {
+            "name": "log4j-core",
+            "version": "2.14.1",
+            "packageManager": "JAVA"
+          }
+        ],
+        "cvss": []
+      },
+      "resources": [
+        {
+          "type": "AWS_ECR_CONTAINER_IMAGE",
+          "id": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "region": "eu-north-1",
+          "details": {
+            "awsEcrContainerImage": {
+              "imageHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "repositoryName": "billing/api",
+              "registry": "123456789012",
+              "inUseCount": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "findingArn": "arn:example:inspector:finding/stale",
+      "awsAccountId": "123456789012",
+      "type": "PACKAGE_VULNERABILITY",
+      "status": "ACTIVE",
+      "severity": "HIGH",
+      "packageVulnerabilityDetails": {
+        "vulnerabilityId": "CVE-2021-45105",
+        "vulnerablePackages": [
+          {
+            "name": "log4j-core",
+            "version": "2.14.1",
+            "packageManager": "JAVA"
+          }
+        ],
+        "cvss": []
+      },
+      "resources": [
+        {
+          "type": "AWS_ECR_CONTAINER_IMAGE",
+          "id": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "region": "eu-north-1",
+          "details": {
+            "awsEcrContainerImage": {
+              "imageHash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "repositoryName": "payments/api",
+              "registry": "123456789012",
+              "inUseCount": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

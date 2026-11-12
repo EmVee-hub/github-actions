@@ -1,0 +1,52 @@
+{
+  "inspector": [
+    {
+      "finding_arn": "arn:example:inspector:finding/1",
+      "cve": "CVE-2021-45105",
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "package": "log4j-core",
+      "version": "2.14.1",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1"
+    },
+    {
+      "finding_arn": "arn:example:inspector:finding/2",
+      "cve": "CVE-2021-45046",
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "package": "log4j-core",
+      "version": "2.14.1",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1"
+    },
+    {
+      "finding_arn": "arn:example:inspector:finding/stale",
+      "cve": "CVE-2021-45105",
+      "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "package": "log4j-core",
+      "version": "2.14.1",
+      "purl": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1"
+    }
+  ],
+  "defender": [
+    {
+      "assessment_id": "synthetic-defender-container-1",
+      "subscription_id": "11111111-1111-1111-1111-111111111111",
+      "cve": "CVE-2021-44228",
+      "image_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "registry": "demo.azurecr.io",
+      "repository": "tools/service",
+      "package_name": "log4j-core",
+      "package_version": "2.14.1",
+      "package_purl": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1"
+    },
+    {
+      "assessment_id": "synthetic-defender-active",
+      "subscription_id": "11111111-1111-1111-1111-111111111111",
+      "cve": "CVE-2021-44228",
+      "image_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "registry": "demo.azurecr.io",
+      "repository": "customer/api",
+      "package_name": "log4j-core",
+      "package_version": "2.14.1",
+      "package_purl": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1"
+    }
+  ]
+}
